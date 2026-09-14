@@ -8,12 +8,12 @@ import { logger } from '@/lib/logger';
 
 const calculatorTool: ToolDefinition = {
   name: 'calculator',
-  description: 'Perform a mathematical calculation. Accepts arithmetic expressions like "12345 * 6789", "125 * 48", or "6000 - 6000".',
+  description: 'Perform a mathematical calculation. Accepts arithmetic expressions like "2 + 2", "100 / 4", or complex equations.',
   parameters: [
     {
       name: 'expression',
       type: 'string',
-      description: 'The mathematical expression to evaluate (e.g. "12345 * 6789" or "847 * 293")',
+      description: 'The mathematical expression to evaluate (e.g. "2 + 2" or "847 * 293")',
       required: true,
     },
   ],

@@ -36,6 +36,15 @@ export function AgentConsole({
 }: AgentConsoleProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId] = useState(() => uuid());
+  const MODEL_LABEL_MAP: Record<string, string> = {
+    auto: 'Auto Router',
+    gemini: 'Google Gemini',
+    nvidia: 'NVIDIA AI',
+    kimi: 'Kimi K2.6',
+    omniroutes: 'Claude Opus 4.6',
+    local: 'Local — Qwen 3.5',
+  };
+
   const [status, setStatus] = useState<'idle' | 'thinking' | 'executing' | 'error'>('idle');
   const [currentModel, setCurrentModel] = useState<string>('Auto Router');
   const [selectedModel, setSelectedModel] = useState<string>('auto');
@@ -47,12 +56,14 @@ export function AgentConsole({
       const saved = localStorage.getItem('murmur_selected_model');
       if (saved) {
         setSelectedModel(saved);
+        setCurrentModel(MODEL_LABEL_MAP[saved] || saved);
       }
     } catch {}
   }, []);
 
   const handleSelectModel = useCallback((modelId: string) => {
     setSelectedModel(modelId);
+    setCurrentModel(MODEL_LABEL_MAP[modelId] || modelId);
     try {
       localStorage.setItem('murmur_selected_model', modelId);
     } catch {}
@@ -201,6 +212,10 @@ export function AgentConsole({
                 assistantContent = event.data.text;
               }
 
+              if ((event as any).type === 'final_response' && (event as any).data?.content) {
+                assistantContent = (event as any).data.content;
+              }
+
               collectedEvents.push(event);
               setPendingEvents([...collectedEvents]);
             } catch {
@@ -217,8 +232,15 @@ export function AgentConsole({
         if (completedTools.length > 0) {
           finalContent = 'The requested actions have been executed successfully.';
         } else {
-          finalContent =
-            'I could not find an available tool to complete this request. Please verify that the required connector (e.g. Google Workspace) is connected under Settings > Connectors.';
+          const isGreeting = /^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening|day)|howdy|sup)[\s!.,?]*$/i.test(text.trim());
+          if (isGreeting) {
+            finalContent = selectedModel === 'omniroutes' || modelUsed.includes('Claude') || modelUsed.includes('omniroutes')
+              ? "Hello! I'm Claude Opus 4.6 running via OmniRoutes. How can I assist you today?"
+              : "Hello! I'm Murmur Agent. How can I help you today?";
+          } else {
+            finalContent =
+              'I could not find an available tool to complete this request. Please verify that the required connector (e.g. Google Workspace) is connected under Settings > Connectors.';
+          }
         }
       }
 
@@ -620,6 +642,8 @@ export function AgentConsole({
                 ? 'Active Provider:'
                 : selectedModel === 'kimi'
                 ? 'Active Model:'
+                : selectedModel === 'omniroutes'
+                ? 'Active Model:'
                 : 'Auto Router:'}
             </span>
             <span style={{ color: '#0F172A', fontWeight: '600' }}>
@@ -627,8 +651,26 @@ export function AgentConsole({
                 ? 'Local — Qwen 3.5'
                 : selectedModel === 'kimi'
                 ? 'Kimi K2.6'
+                : selectedModel === 'omniroutes'
+                ? 'Claude Opus 4.6 (OmniRoutes)'
                 : currentModel}
             </span>
+            {selectedModel === 'omniroutes' && (
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                color: '#D97706',
+                backgroundColor: '#FEF3C7',
+                border: '1px solid #FDE68A',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}>
+                <span>★</span> OmniRoutes
+              </span>
+            )}
             {selectedModel === 'local' && (
               <span style={{
                 fontSize: '10px',
