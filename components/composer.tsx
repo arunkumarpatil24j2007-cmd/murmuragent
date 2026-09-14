@@ -386,6 +386,20 @@ export function Composer({
                 isLocal: false,
               },
               {
+                id: 'kimi',
+                label: 'Kimi K2.6',
+                badge: 'moonshotai/kimi-k2.6:free',
+                description: 'Moonshot AI high-performance reasoning model with native tool execution',
+                icon: (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M8 12h8" />
+                    <path d="M12 8v8" />
+                  </svg>
+                ),
+                isLocal: false,
+              },
+              {
                 id: 'local',
                 label: 'Local — Qwen 3.5',
                 badge: '100% Private (Ollama)',
@@ -638,22 +652,38 @@ export function Composer({
             {/* [ ⚡ Model Selector Button / Pill ] */}
             {(() => {
               const isLocal = selectedModelPreference === 'local';
+              const isKimi = selectedModelPreference === 'kimi';
               let displayLabel = activeModelLabel || 'Auto Router';
               if (selectedModelPreference === 'local') {
                 displayLabel = 'Local — Qwen 3.5';
+              } else if (selectedModelPreference === 'kimi') {
+                displayLabel = 'Kimi K2.6';
               } else if (selectedModelPreference === 'gemini') {
                 displayLabel = 'Google Gemini';
               } else if (selectedModelPreference === 'nvidia') {
                 displayLabel = 'NVIDIA AI';
               }
 
+              let bgColor = '#0F172A';
+              let borderColor = 'transparent';
+              let boxShadow = '0 2px 6px rgba(15, 23, 42, 0.15)';
+              if (isLocal) {
+                bgColor = '#064E3B';
+                borderColor = '#059669';
+                boxShadow = '0 2px 6px rgba(6, 78, 59, 0.35)';
+              } else if (isKimi) {
+                bgColor = '#3B0764'; // Plum/Purple accent for Moonshot Kimi
+                borderColor = '#9333EA';
+                boxShadow = '0 2px 6px rgba(59, 7, 100, 0.35)';
+              }
+
               return (
                 <button
                   type="button"
                   onClick={() => setIsModelMenuOpen((prev) => !prev)}
-                  title="Click to switch model provider: Auto, Gemini, NVIDIA, or Local Qwen (Selection is persisted)"
+                  title="Click to switch model provider: Auto, Kimi K2.6, Gemini, NVIDIA, or Local Qwen (Selection is persisted)"
                   style={{
-                    backgroundColor: isLocal ? '#064E3B' : '#0F172A',
+                    backgroundColor: bgColor,
                     color: '#F8FAFC',
                     borderRadius: '9999px',
                     padding: '6px 13px',
@@ -664,10 +694,8 @@ export function Composer({
                     fontWeight: 600,
                     letterSpacing: '-0.01em',
                     userSelect: 'none',
-                    boxShadow: isLocal
-                      ? '0 2px 6px rgba(6, 78, 59, 0.35)'
-                      : '0 2px 6px rgba(15, 23, 42, 0.15)',
-                    border: isLocal ? '1px solid #059669' : '1px solid transparent',
+                    boxShadow: boxShadow,
+                    border: `1px solid ${borderColor}`,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                   }}

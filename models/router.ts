@@ -7,6 +7,7 @@ import { NvidiaProvider } from './nvidia';
 import { GeminiProvider } from './gemini';
 import { OpenAIProvider } from './openai';
 import { LocalQwenProvider } from './local-qwen';
+import { kimi, KimiProvider, getKimiDiagnostic } from './kimi';
 
 const gemini = new GeminiProvider();
 const nvidia = new NvidiaProvider();
@@ -14,9 +15,9 @@ const openai = new OpenAIProvider();
 const local = new LocalQwenProvider();
 
 /** All registered providers */
-export const allProviders: ModelProvider[] = [gemini, nvidia, openai, local];
+export const allProviders: ModelProvider[] = [gemini, nvidia, kimi, openai, local];
 
-export type ModelPreference = 'auto' | 'gemini' | 'nvidia' | 'openai' | 'local' | 'qwen' | string;
+export type ModelPreference = 'auto' | 'gemini' | 'nvidia' | 'kimi' | 'openai' | 'local' | 'qwen' | string;
 
 export interface ProviderHealth {
   id: string;
@@ -29,6 +30,7 @@ export interface ProviderHealth {
 const providerHealthMap = new Map<string, ProviderHealth>([
   ['gemini', { id: 'gemini', isExhausted: false, consecutiveErrors: 0 }],
   ['nvidia', { id: 'nvidia', isExhausted: false, consecutiveErrors: 0 }],
+  ['kimi', { id: 'kimi', isExhausted: false, consecutiveErrors: 0 }],
   ['openai', { id: 'openai', isExhausted: false, consecutiveErrors: 0 }],
   ['local', { id: 'local', isExhausted: false, consecutiveErrors: 0 }],
 ]);
@@ -130,6 +132,17 @@ export async function selectProvider(preference: ModelPreference = 'auto', taskP
     return local;
   }
 
+  // Explicit Kimi preference — STRICT NO-FALLBACK: NEVER fall back to other providers
+  if (normPref === 'kimi' || normPref.includes('kimi') || normPref.includes('moonshot')) {
+    const isAvail = await kimi.isAvailable();
+    if (!isAvail) {
+      throw new Error(
+        `Kimi K2.6 is not configured. Please set KIMI_API_KEY in server environment. (Fallback models disabled).`
+      );
+    }
+    return kimi;
+  }
+
   // Explicit cloud preferences
   let targetProvider: ModelProvider | undefined;
   if (normPref.includes('gpt') || normPref.includes('openai')) {
@@ -200,9 +213,23 @@ export async function executeWithFailover(
     }
   }
 
+  // STRICT KIMI ZERO-FALLBACK ISOLATION:
+  // When executing with Kimi K2.6, NEVER route or fail over to other providers if Kimi fails.
+  if (currentProvider.metadata.id === 'kimi') {
+    try {
+      logger.info('ModelRouter', `Executing generation with [kimi] (${currentProvider.metadata.name}) (Isolated Kimi run, no fallback)`);
+      const response = await currentProvider.generate(messages, options);
+      return { response, providerUsed: currentProvider };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('ModelRouter', `Kimi provider execution failed: ${msg}`);
+      throw err instanceof Error ? err : new Error(`Kimi execution failed: ${msg}`);
+    }
+  }
+
   // Determine fallback order excluding the first provider
   const allAvailable: ModelProvider[] = [];
-  for (const p of [gemini, nvidia, openai, local]) {
+  for (const p of [gemini, nvidia, kimi, openai, local]) {
     if (await p.isAvailable()) {
       allAvailable.push(p);
     }
@@ -261,4 +288,4 @@ export async function getProviderStatus(): Promise<Array<{ id: string; name: str
   return status;
 }
 
-export { gemini, nvidia, openai, local };
+export { gemini, nvidia, openai, local, kimi, getKimiDiagnostic };

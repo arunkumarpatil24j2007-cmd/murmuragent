@@ -8,6 +8,14 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [selectedModel, setSelectedModel] = useState<string>('auto');
   const [localConnected, setLocalConnected] = useState<boolean>(true);
+  const [kimiDiagnostic, setKimiDiagnostic] = useState<{
+    model: string;
+    exactModelId: string;
+    provider: string;
+    connectionStatus: string;
+    lastLatencyMs?: number;
+    lastError?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -22,6 +30,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         setLocalConnected(data?.providers?.local?.status === 'available');
       })
       .catch(() => setLocalConnected(false));
+
+    fetch('/api/diagnostic')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.kimi) {
+          setKimiDiagnostic(data.kimi);
+        }
+      })
+      .catch(() => {});
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -128,6 +145,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <span>
                 {selectedModel === 'local'
                   ? 'Local — Qwen 3.5 (Ollama)'
+                  : selectedModel === 'kimi'
+                  ? 'Kimi K2.6 (Moonshot AI)'
                   : selectedModel === 'gemini'
                   ? 'Google Gemini (Flash)'
                   : selectedModel === 'nvidia'
@@ -136,11 +155,59 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </span>
               <span style={{
                 fontSize: '11px',
-                color: selectedModel === 'local' ? '#059669' : '#1b7440',
+                color: selectedModel === 'local' ? '#059669' : selectedModel === 'kimi' ? '#9333EA' : '#1b7440',
                 fontWeight: '600',
               }}>
-                {selectedModel === 'local' ? '🔒 100% Local' : 'Active'}
+                {selectedModel === 'local' ? '🔒 100% Local' : selectedModel === 'kimi' ? '★ Kimi Active' : 'Active'}
               </span>
+            </div>
+          </div>
+
+          {/* Developer Diagnostic — Kimi K2.6 (Development & Inspection) */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Developer Diagnostic — Kimi K2.6
+              </label>
+              <span style={{ fontSize: '10px', color: '#6B7280', fontFamily: 'monospace' }}>
+                moonshotai/kimi-k2.6:free
+              </span>
+            </div>
+            <div style={{
+              marginTop: '6px',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              backgroundColor: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              fontSize: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              fontFamily: 'monospace',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Model:</span>
+                <span style={{ fontWeight: '600', color: '#0F172A' }}>Kimi K2.6</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Provider:</span>
+                <span style={{ fontWeight: '600', color: '#0F172A' }}>{kimiDiagnostic?.provider || 'kimi'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Connection Status:</span>
+                <span style={{
+                  fontWeight: '600',
+                  color: kimiDiagnostic?.connectionStatus === 'connected' ? '#059669' : '#D97706',
+                }}>
+                  {kimiDiagnostic?.connectionStatus === 'connected' ? '● Connected' : '○ Standby'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Last Latency:</span>
+                <span style={{ fontWeight: '600', color: '#0F172A' }}>
+                  {kimiDiagnostic?.lastLatencyMs ? `${(kimiDiagnostic.lastLatencyMs / 1000).toFixed(2)}s` : 'N/A'}
+                </span>
+              </div>
             </div>
           </div>
 

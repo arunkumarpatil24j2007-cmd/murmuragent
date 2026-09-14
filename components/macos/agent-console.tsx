@@ -603,9 +603,19 @@ export function AgentConsole({
             Press <kbd style={{ padding: '1px 5px', borderRadius: '4px', background: '#F3F4F6', border: '1px solid #E5E7EB', fontWeight: '600' }}>⏎ Return</kbd> to send, <kbd style={{ padding: '1px 5px', borderRadius: '4px', background: '#F3F4F6', border: '1px solid #E5E7EB', fontWeight: '600' }}>⇧ Shift + ⏎</kbd> for new line
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>{selectedModel === 'local' ? 'Active Provider:' : 'Auto Router:'}</span>
+            <span>
+              {selectedModel === 'local'
+                ? 'Active Provider:'
+                : selectedModel === 'kimi'
+                ? 'Active Model:'
+                : 'Auto Router:'}
+            </span>
             <span style={{ color: '#0F172A', fontWeight: '600' }}>
-              {selectedModel === 'local' ? 'Local — Qwen 3.5' : currentModel}
+              {selectedModel === 'local'
+                ? 'Local — Qwen 3.5'
+                : selectedModel === 'kimi'
+                ? 'Kimi K2.6'
+                : currentModel}
             </span>
             {selectedModel === 'local' && (
               <span style={{
@@ -620,6 +630,22 @@ export function AgentConsole({
                 gap: '4px',
               }}>
                 <span>●</span> 100% Local (Mac)
+              </span>
+            )}
+            {selectedModel === 'kimi' && (
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                color: '#7E22CE',
+                backgroundColor: '#FAF5FF',
+                border: '1px solid #E9D5FF',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}>
+                <span>★</span> moonshotai/kimi-k2.6:free
               </span>
             )}
           </div>

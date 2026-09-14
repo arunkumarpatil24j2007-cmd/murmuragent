@@ -21,6 +21,7 @@ import { registerSheetsTools } from '@/tools/google/sheets';
 import { registerNotionTools } from '@/tools/notion';
 import { registerVercelTools } from '@/tools/vercel';
 import { registerGitHubTools } from '@/tools/github';
+import { registerCalculatorTools } from '@/tools/calculator';
 import { registerBrowserTools } from '@/browser/browser-agent';
 import { initializeMCP } from '@/mcp/registry';
 
@@ -43,6 +44,7 @@ export async function initializeAgent(): Promise<void> {
   registerNotionTools();
   registerVercelTools();
   registerGitHubTools();
+  registerCalculatorTools();
   registerBrowserTools();
 
   // Discover and register MCP tools

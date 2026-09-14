@@ -12,6 +12,7 @@ export async function GET(_req: NextRequest) {
 
   const nvidiaStatus = providers.find((p) => p.id === 'nvidia');
   const geminiStatus = providers.find((p) => p.id === 'gemini');
+  const kimiStatus = providers.find((p) => p.id === 'kimi');
   const localStatus = providers.find((p) => p.id === 'local');
 
   const health: HealthStatus = {
@@ -24,6 +25,11 @@ export async function GET(_req: NextRequest) {
       gemini: {
         configured: isProviderConfigured('gemini'),
         status: geminiStatus?.available ? 'available' : 'not configured',
+      },
+      kimi: {
+        configured: isProviderConfigured('kimi'),
+        status: kimiStatus?.available ? 'available' : 'not configured',
+        model: 'moonshotai/kimi-k2.6:free',
       },
       local: {
         configured: isProviderConfigured('local'),

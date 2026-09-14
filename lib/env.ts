@@ -32,6 +32,11 @@ export const env = {
     apiKey: process.env.NVIDIA_API_KEY || '',
     model: process.env.NVIDIA_MODEL || 'meta/llama-3.2-11b-vision-instruct',
   },
+  kimi: {
+    apiKey: process.env.KIMI_API_KEY || '',
+    model: process.env.KIMI_MODEL || 'moonshotai/kimi-k2.6:free',
+    baseUrl: process.env.KIMI_BASE_URL || 'https://openrouter.ai/api/v1',
+  },
   local: {
     provider: process.env.LOCAL_MODEL_PROVIDER || 'ollama',
     baseUrl: process.env.LOCAL_MODEL_BASE_URL || 'http://127.0.0.1:11434/v1',
@@ -82,12 +87,14 @@ export const env = {
 } as const;
 
 /** Check whether a provider is configured */
-export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'local' | 'airtop' | 'palmier' | 'notion' | 'vercel' | 'google' | 'supabase'): boolean {
+export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'local' | 'airtop' | 'palmier' | 'notion' | 'vercel' | 'google' | 'supabase'): boolean {
   switch (provider) {
     case 'gemini':
       return !!env.gemini.apiKey;
     case 'nvidia':
       return !!env.nvidia.apiKey;
+    case 'kimi':
+      return !!env.kimi.apiKey;
     case 'local':
       return !!env.local.baseUrl && !!env.local.model;
     case 'airtop':
