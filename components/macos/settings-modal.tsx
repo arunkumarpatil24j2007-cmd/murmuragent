@@ -16,6 +16,19 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     lastLatencyMs?: number;
     lastError?: string;
   } | null>(null);
+  const [anthropicDiagnostic, setAnthropicDiagnostic] = useState<{
+    selectedModel: string;
+    provider: string;
+    requestedModel: string;
+    actualRequestModel: string;
+    responseModel: string;
+    requestId: string;
+    status: string;
+    latency: string;
+    toolCalls: number;
+    fallbackUsed: string;
+    lastError?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -36,6 +49,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .then((data) => {
         if (data?.kimi) {
           setKimiDiagnostic(data.kimi);
+        }
+        if (data?.anthropic) {
+          setAnthropicDiagnostic(data.anthropic);
         }
       })
       .catch(() => {});
@@ -143,7 +159,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               alignItems: 'center',
             }}>
               <span>
-                {selectedModel === 'omniroutes'
+                {selectedModel === 'anthropic'
+                  ? 'Claude Opus 4.6 (Anthropic)'
+                  : selectedModel === 'omniroutes'
                   ? 'Claude Opus 4.6 (OmniRoutes)'
                   : selectedModel === 'local'
                   ? 'Local — Qwen 3.5 (Ollama)'
@@ -157,11 +175,62 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </span>
               <span style={{
                 fontSize: '11px',
-                color: selectedModel === 'local' ? '#059669' : selectedModel === 'omniroutes' ? '#D97706' : selectedModel === 'kimi' ? '#9333EA' : '#1b7440',
+                color: (selectedModel === 'anthropic' || selectedModel === 'omniroutes') ? '#D97706' : selectedModel === 'local' ? '#059669' : selectedModel === 'kimi' ? '#9333EA' : '#1b7440',
                 fontWeight: '600',
               }}>
-                {selectedModel === 'local' ? '🔒 100% Local' : selectedModel === 'omniroutes' ? '★ Claude Active' : selectedModel === 'kimi' ? '★ Kimi Active' : 'Active'}
+                {(selectedModel === 'anthropic' || selectedModel === 'omniroutes') ? '★ Claude Active' : selectedModel === 'local' ? '🔒 100% Local' : selectedModel === 'kimi' ? '★ Kimi Active' : 'Active'}
               </span>
+            </div>
+          </div>
+
+          {/* Developer Diagnostic — Claude Opus 4.6 */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Developer Diagnostic — Claude Opus 4.6
+              </label>
+              <span style={{ fontSize: '10px', color: '#D97706', fontFamily: 'monospace', fontWeight: 600 }}>
+                claude-opus-4-6
+              </span>
+            </div>
+            <div style={{
+              marginTop: '6px',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              fontSize: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              fontFamily: 'monospace',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#92400E' }}>Selected model:</span>
+                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.selectedModel || 'Claude Opus 4.6'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#92400E' }}>Provider:</span>
+                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.provider || 'anthropic'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#92400E' }}>Request model:</span>
+                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.actualRequestModel || 'claude-opus-4-6'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#92400E' }}>Response model:</span>
+                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.responseModel || 'claude-opus-4-6'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#92400E' }}>Status:</span>
+                <span style={{ fontWeight: '600', color: anthropicDiagnostic?.status === 'SUCCESS' ? '#059669' : '#D97706' }}>
+                  {anthropicDiagnostic?.status || 'IDLE'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#92400E' }}>Fallback used:</span>
+                <span style={{ fontWeight: '600', color: '#059669' }}>{anthropicDiagnostic?.fallbackUsed || 'NO'}</span>
+              </div>
             </div>
           </div>
 

@@ -41,6 +41,7 @@ export function AgentConsole({
     gemini: 'Google Gemini',
     nvidia: 'NVIDIA AI',
     kimi: 'Kimi K2.6',
+    anthropic: 'Claude Opus 4.6',
     omniroutes: 'Claude Opus 4.6',
     local: 'Local — Qwen 3.5',
   };
@@ -640,6 +641,8 @@ export function AgentConsole({
             <span>
               {selectedModel === 'local'
                 ? 'Active Provider:'
+                : selectedModel === 'anthropic'
+                ? 'Active Model:'
                 : selectedModel === 'kimi'
                 ? 'Active Model:'
                 : selectedModel === 'omniroutes'
@@ -649,12 +652,30 @@ export function AgentConsole({
             <span style={{ color: '#0F172A', fontWeight: '600' }}>
               {selectedModel === 'local'
                 ? 'Local — Qwen 3.5'
+                : selectedModel === 'anthropic'
+                ? 'Claude Opus 4.6'
                 : selectedModel === 'kimi'
                 ? 'Kimi K2.6'
                 : selectedModel === 'omniroutes'
                 ? 'Claude Opus 4.6 (OmniRoutes)'
                 : currentModel}
             </span>
+            {selectedModel === 'anthropic' && (
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                color: '#D97706',
+                backgroundColor: '#FEF3C7',
+                border: '1px solid #FDE68A',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}>
+                <span>★</span> Anthropic
+              </span>
+            )}
             {selectedModel === 'omniroutes' && (
               <span style={{
                 fontSize: '10px',

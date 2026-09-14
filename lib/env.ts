@@ -57,6 +57,11 @@ export const env = {
     model: process.env.OMNIROUTES_MODEL || 'aug/claude-opus-4.6',
     baseUrl: process.env.OMNIROUTES_BASE_URL || 'http://localhost:20128/v1',
   },
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || process.env.OMNIROUTES_API_KEY || '',
+    model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
+    baseUrl: process.env.ANTHROPIC_BASE_URL || process.env.OMNIROUTES_BASE_URL || 'http://localhost:20128/v1',
+  },
 
   // Browser
   airtop: {
@@ -102,7 +107,7 @@ export const env = {
 } as const;
 
 /** Check whether a provider is configured */
-export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'omniroutes' | 'local' | 'airtop' | 'palmier' | 'notion' | 'vercel' | 'google' | 'supabase'): boolean {
+export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'omniroutes' | 'anthropic' | 'local' | 'airtop' | 'palmier' | 'notion' | 'vercel' | 'google' | 'supabase'): boolean {
   switch (provider) {
     case 'gemini':
       return !!env.gemini.apiKey;
@@ -112,6 +117,8 @@ export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'o
       return !!env.kimi.apiKey;
     case 'omniroutes':
       return !!env.omniroutes.apiKey;
+    case 'anthropic':
+      return !!env.anthropic.apiKey;
     case 'local':
       return !!env.local.baseUrl && !!env.local.model;
     case 'airtop':
