@@ -94,6 +94,13 @@ export function ConnectorsView() {
   };
 
   const handleOpenConnect = (c: ConnectorInfo) => {
+    const isGoogle = c.id.startsWith('google_') || c.id === 'gmail';
+    if (isGoogle && !c.isConnected) {
+      window.location.href = `/api/auth/google/login?return_to=${encodeURIComponent(
+        window.location.pathname + '?tab=connectors'
+      )}`;
+      return;
+    }
     setSelectedConnector(c);
     setIsModalOpen(true);
   };
@@ -505,7 +512,11 @@ export function ConnectorsView() {
                         transition: 'background-color 0.15s ease',
                       }}
                     >
-                      {c.isConnected ? 'Configure' : '1-Click Connect'}
+                      {c.isConnected
+                        ? 'Manage'
+                        : (c.id.startsWith('google_') || c.id === 'gmail')
+                        ? 'Connect Google'
+                        : '1-Click Connect'}
                     </button>
                   </div>
                 </div>

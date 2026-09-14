@@ -12,6 +12,7 @@ export type ConnectorId =
   | 'google_drive'
   | 'google_sheets'
   | 'google_docs'
+  | 'google_calendar'
   | 'gmail'
   | 'notion'
   | 'vercel'
@@ -116,6 +117,23 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
       { name: 'docs.read', description: 'Read document content and structural text', permission: 'READ' },
       { name: 'docs.create', description: 'Create new formatted Google Docs', permission: 'WRITE' },
       { name: 'docs.append_text', description: 'Append text, outlines, or bullet points', permission: 'WRITE' },
+    ],
+  },
+  google_calendar: {
+    id: 'google_calendar',
+    name: 'Google Calendar',
+    shortDescription: 'Schedule meetings, view calendar events, and manage schedule.',
+    longDescription: 'Autonomous calendar intelligence. Schedule meetings with attendees, verify conflicts, search upcoming schedule, and generate direct clickable Google Calendar links.',
+    category: 'workspace',
+    categoryLabel: 'Google Workspace',
+    icon: 'calendar',
+    brandColor: '#4285F4',
+    authType: 'oauth',
+    docsUrl: 'https://developers.google.com/calendar',
+    tools: [
+      { name: 'calendar.listEvents', description: 'List scheduled events and meetings', permission: 'READ' },
+      { name: 'calendar.createEvent', description: 'Schedule new meeting with direct link', permission: 'WRITE' },
+      { name: 'calendar.deleteEvent', description: 'Cancel calendar event by ID', permission: 'DANGEROUS' },
     ],
   },
   gmail: {
@@ -330,7 +348,7 @@ class ConnectorsStore {
       let accountAvatar: string | undefined = saved?.metadata?.accountAvatar;
       let lastConnectedAt: string | undefined = saved?.metadata?.connectedAt;
 
-      if (id === 'google_drive' || id === 'google_sheets' || id === 'google_docs' || id === 'gmail') {
+      if (id === 'google_drive' || id === 'google_sheets' || id === 'google_docs' || id === 'google_calendar' || id === 'gmail') {
         isConnected = googleConnected;
         if (googleConnected) {
           accountEmail = googleAccount.email || 'Connected Google Account';
@@ -412,7 +430,7 @@ class ConnectorsStore {
    * Disconnect a connector by revoking credentials.
    */
   async disconnectConnector(id: ConnectorId): Promise<void> {
-    if (id === 'google_drive' || id === 'google_sheets' || id === 'google_docs' || id === 'gmail') {
+    if (id === 'google_drive' || id === 'google_sheets' || id === 'google_docs' || id === 'google_calendar' || id === 'gmail') {
       await tokenStore.deleteTokens();
     }
 

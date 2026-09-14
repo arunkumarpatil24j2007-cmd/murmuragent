@@ -18,6 +18,7 @@ import { registerGmailTools } from '@/tools/google/gmail';
 import { registerDriveTools } from '@/tools/google/drive';
 import { registerDocsTools } from '@/tools/google/docs';
 import { registerSheetsTools } from '@/tools/google/sheets';
+import { registerCalendarTools } from '@/tools/google/calendar';
 import { registerNotionTools } from '@/tools/notion';
 import { registerVercelTools } from '@/tools/vercel';
 import { registerGitHubTools } from '@/tools/github';
@@ -41,6 +42,7 @@ export async function initializeAgent(): Promise<void> {
   registerDriveTools();
   registerDocsTools();
   registerSheetsTools();
+  registerCalendarTools();
   registerNotionTools();
   registerVercelTools();
   registerGitHubTools();

@@ -15,14 +15,26 @@ import type {
 
 export type { GoogleStoredTokens, GoogleUserInfo, GoogleAccountSummary };
 
+import crypto from 'crypto';
+
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/documents',
   'https://www.googleapis.com/auth/spreadsheets',
 ] as const;
+
+export interface GoogleCapabilities {
+  gmail: boolean;
+  calendar: boolean;
+  drive: boolean;
+  docs: boolean;
+  sheets: boolean;
+}
 
 export interface GoogleAuthStatus {
   isConfigured: boolean;
@@ -33,7 +45,61 @@ export interface GoogleAuthStatus {
   picture?: string;
   expiresAt?: string;
   scopes?: string[];
+  capabilities?: GoogleCapabilities;
   accountsCount?: number;
+}
+
+// MARK: - CSRF OAuth State Protection
+
+const STATE_SECRET = env.google.tokenEncryptionKey || 'murmur-agent-oauth-state-secret-2026';
+
+export interface OAuthStatePayload {
+  nonce: string;
+  userId?: string;
+  timestamp: number;
+}
+
+/** Generate cryptographically random, signed CSRF state with 10-minute expiration */
+export function generateOAuthState(userId?: string): { stateParam: string; cookieValue: string } {
+  const nonce = crypto.randomBytes(24).toString('hex');
+  const timestamp = Date.now();
+  const payload: OAuthStatePayload = { nonce, userId, timestamp };
+  const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', STATE_SECRET).update(payloadStr).digest('hex');
+  const token = `${payloadStr}.${signature}`;
+  return {
+    stateParam: token,
+    cookieValue: token,
+  };
+}
+
+/** Validate CSRF OAuth state against cookie and timestamp */
+export function validateOAuthState(stateParam: string | null, cookieValue?: string | null): boolean {
+  if (!stateParam || !cookieValue || stateParam !== cookieValue) {
+    return false;
+  }
+
+  try {
+    const [payloadStr, signature] = stateParam.split('.');
+    if (!payloadStr || !signature) return false;
+
+    // Verify HMAC signature
+    const expectedSig = crypto.createHmac('sha256', STATE_SECRET).update(payloadStr).digest('hex');
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+      return false;
+    }
+
+    // Verify expiration (10 minutes)
+    const payload: OAuthStatePayload = JSON.parse(Buffer.from(payloadStr, 'base64url').toString('utf8'));
+    const maxAgeMs = 10 * 60 * 1000;
+    if (Date.now() - payload.timestamp > maxAgeMs) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // MARK: - OAuth2 Client Setup
@@ -164,11 +230,27 @@ export async function getGoogleAuthStatus(accountId?: string): Promise<GoogleAut
       isConnected: false,
       storeType,
       accountsCount: accounts.length,
+      capabilities: {
+        gmail: false,
+        calendar: false,
+        drive: false,
+        docs: false,
+        sheets: false,
+      },
     };
   }
 
   const expiresAt = stored.expiry_date ? new Date(stored.expiry_date).toISOString() : undefined;
   const scopes = stored.scope ? stored.scope.split(' ') : undefined;
+  const scopeStr = stored.scope || '';
+
+  const capabilities: GoogleCapabilities = {
+    gmail: scopeStr.includes('gmail') || !scopeStr,
+    calendar: scopeStr.includes('calendar') || !scopeStr,
+    drive: scopeStr.includes('drive') || !scopeStr,
+    docs: scopeStr.includes('documents') || scopeStr.includes('drive') || !scopeStr,
+    sheets: scopeStr.includes('spreadsheets') || scopeStr.includes('drive') || !scopeStr,
+  };
 
   return {
     isConfigured,
@@ -179,6 +261,7 @@ export async function getGoogleAuthStatus(accountId?: string): Promise<GoogleAut
     picture: stored.user?.picture,
     expiresAt,
     scopes,
+    capabilities,
     accountsCount: accounts.length,
   };
 }

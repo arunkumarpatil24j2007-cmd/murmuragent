@@ -5,22 +5,32 @@ import fs from 'fs';
 import path from 'path';
 
 // Safely load .env.local for standalone scripts, next-server, and background agents
-if (typeof process !== 'undefined' && typeof process.loadEnvFile === 'function') {
-  const envCandidates = [
-    path.resolve(process.cwd(), '.env.local'),
-    path.resolve(__dirname, '../.env.local'),
-    '/Users/arunkumarpatil/murmuragent/.env.local',
-    '/Users/arunkumarpatil/Murmur/agent-server/.env.local',
-  ];
-  for (const p of envCandidates) {
-    try {
-      if (fs.existsSync(/*turbopackIgnore: true*/ p)) {
-        process.loadEnvFile(p);
-        break;
+function loadLocalEnv() {
+  if (typeof window !== 'undefined') return;
+  const envPath = path.join(process.cwd(), '.env.local');
+  try {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          // Strip wrapping quotes if any
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key] || process.env[key] === '') {
+            process.env[key] = val;
+          }
+        }
       }
-    } catch {}
-  }
+    }
+  } catch {}
 }
+loadLocalEnv();
 
 export const env = {
   // Model Providers

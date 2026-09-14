@@ -210,10 +210,22 @@ export function AgentConsole({
         }
       }
 
+      // Determine honest assistant response
+      let finalContent = assistantContent.trim();
+      if (!finalContent) {
+        const completedTools = collectedEvents.filter((e) => e.type === 'tool_result');
+        if (completedTools.length > 0) {
+          finalContent = 'The requested actions have been executed successfully.';
+        } else {
+          finalContent =
+            'I could not find an available tool to complete this request. Please verify that the required connector (e.g. Google Workspace) is connected under Settings > Connectors.';
+        }
+      }
+
       const assistantMsg: ChatMessage = {
         id: uuid(),
         role: 'assistant',
-        content: assistantContent || 'Task completed successfully.',
+        content: finalContent,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         events: collectedEvents,
         model: modelUsed,
