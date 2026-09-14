@@ -13,6 +13,7 @@ export async function GET(_req: NextRequest) {
   const nvidiaStatus = providers.find((p) => p.id === 'nvidia');
   const geminiStatus = providers.find((p) => p.id === 'gemini');
   const kimiStatus = providers.find((p) => p.id === 'kimi');
+  const omniroutesStatus = providers.find((p) => p.id === 'omniroutes');
   const localStatus = providers.find((p) => p.id === 'local');
 
   const health: HealthStatus = {
@@ -30,6 +31,11 @@ export async function GET(_req: NextRequest) {
         configured: isProviderConfigured('kimi'),
         status: kimiStatus?.available ? 'available' : 'not configured',
         model: 'moonshotai/kimi-k2.6:free',
+      },
+      omniroutes: {
+        configured: isProviderConfigured('omniroutes'),
+        status: omniroutesStatus?.available ? 'available' : 'not configured',
+        model: 'aug/claude-opus-4.6',
       },
       local: {
         configured: isProviderConfigured('local'),

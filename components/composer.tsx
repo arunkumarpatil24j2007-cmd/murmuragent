@@ -400,6 +400,18 @@ export function Composer({
                 isLocal: false,
               },
               {
+                id: 'omniroutes',
+                label: 'Claude Opus 4.6',
+                badge: 'OmniRoutes',
+                description: 'Anthropic Claude Opus 4.6 frontier model routed via OmniRoutes',
+                icon: (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2a1 1 0 0 1 1 1v7.05l4.98-4.98a1 1 0 1 1 1.41 1.41L14.41 11.46H21a1 1 0 1 1 0 2h-6.59l4.98 4.98a1 1 0 0 1-1.41 1.41L13 14.88V22a1 1 0 1 1-2 0v-7.12l-4.98 4.98a1 1 0 0 1-1.41-1.41l4.98-4.98H3a1 1 0 1 1 0-2h6.59L4.61 6.48a1 1 0 0 1 1.41-1.41L11 10.05V3a1 1 0 0 1 1-1z" />
+                  </svg>
+                ),
+                isLocal: false,
+              },
+              {
                 id: 'local',
                 label: 'Local — Qwen 3.5',
                 badge: '100% Private (Ollama)',

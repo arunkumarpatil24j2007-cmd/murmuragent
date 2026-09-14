@@ -8,6 +8,7 @@ import { GeminiProvider } from './gemini';
 import { OpenAIProvider } from './openai';
 import { LocalQwenProvider } from './local-qwen';
 import { kimi, KimiProvider, getKimiDiagnostic } from './kimi';
+import { omniroutes, OmniRoutesProvider, getOmniRoutesDiagnostic } from './omniroutes';
 
 const gemini = new GeminiProvider();
 const nvidia = new NvidiaProvider();
@@ -15,9 +16,9 @@ const openai = new OpenAIProvider();
 const local = new LocalQwenProvider();
 
 /** All registered providers */
-export const allProviders: ModelProvider[] = [gemini, nvidia, kimi, openai, local];
+export const allProviders: ModelProvider[] = [gemini, nvidia, kimi, omniroutes, openai, local];
 
-export type ModelPreference = 'auto' | 'gemini' | 'nvidia' | 'kimi' | 'openai' | 'local' | 'qwen' | string;
+export type ModelPreference = 'auto' | 'gemini' | 'nvidia' | 'kimi' | 'omniroutes' | 'claude' | 'openai' | 'local' | 'qwen' | string;
 
 export interface ProviderHealth {
   id: string;
@@ -31,6 +32,7 @@ const providerHealthMap = new Map<string, ProviderHealth>([
   ['gemini', { id: 'gemini', isExhausted: false, consecutiveErrors: 0 }],
   ['nvidia', { id: 'nvidia', isExhausted: false, consecutiveErrors: 0 }],
   ['kimi', { id: 'kimi', isExhausted: false, consecutiveErrors: 0 }],
+  ['omniroutes', { id: 'omniroutes', isExhausted: false, consecutiveErrors: 0 }],
   ['openai', { id: 'openai', isExhausted: false, consecutiveErrors: 0 }],
   ['local', { id: 'local', isExhausted: false, consecutiveErrors: 0 }],
 ]);
@@ -143,6 +145,17 @@ export async function selectProvider(preference: ModelPreference = 'auto', taskP
     return kimi;
   }
 
+  // Explicit Claude Opus 4.6 preference via OmniRoutes — STRICT NO-FALLBACK: NEVER fall back to other providers
+  if (normPref === 'omniroutes' || normPref === 'claude' || normPref.includes('opus') || normPref.includes('claude')) {
+    const isAvail = await omniroutes.isAvailable();
+    if (!isAvail) {
+      throw new Error(
+        `Claude Opus 4.6 is currently unavailable: OmniRoutes API key is missing. No fallback model was used.`
+      );
+    }
+    return omniroutes;
+  }
+
   // Explicit cloud preferences
   let targetProvider: ModelProvider | undefined;
   if (normPref.includes('gpt') || normPref.includes('openai')) {
@@ -227,9 +240,23 @@ export async function executeWithFailover(
     }
   }
 
+  // STRICT OMNIROUTES CLAUDE OPUS 4.6 ZERO-FALLBACK ISOLATION:
+  // When executing with Claude Opus 4.6, NEVER route or fail over to other providers if Claude fails.
+  if (currentProvider.metadata.id === 'omniroutes') {
+    try {
+      logger.info('ModelRouter', `Executing generation with [omniroutes] (${currentProvider.metadata.name}) (Isolated Claude Opus 4.6 run, no fallback)`);
+      const response = await currentProvider.generate(messages, options);
+      return { response, providerUsed: currentProvider };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('ModelRouter', `Claude Opus 4.6 provider execution failed: ${msg}`);
+      throw err instanceof Error ? err : new Error(`Claude Opus 4.6 request failed: ${msg}. No fallback model was used.`);
+    }
+  }
+
   // Determine fallback order excluding the first provider
   const allAvailable: ModelProvider[] = [];
-  for (const p of [gemini, nvidia, kimi, openai, local]) {
+  for (const p of [gemini, nvidia, kimi, omniroutes, openai, local]) {
     if (await p.isAvailable()) {
       allAvailable.push(p);
     }
@@ -288,4 +315,4 @@ export async function getProviderStatus(): Promise<Array<{ id: string; name: str
   return status;
 }
 
-export { gemini, nvidia, openai, local, kimi, getKimiDiagnostic };
+export { gemini, nvidia, openai, local, kimi, omniroutes, getKimiDiagnostic, getOmniRoutesDiagnostic };

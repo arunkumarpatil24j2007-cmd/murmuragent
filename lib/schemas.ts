@@ -187,6 +187,7 @@ export interface HealthStatus {
     nvidia: { configured: boolean; status: string };
     gemini: { configured: boolean; status: string };
     kimi?: { configured: boolean; status: string; model?: string };
+    omniroutes?: { configured: boolean; status: string; model?: string };
     local?: { configured: boolean; status: string; model?: string; provider?: string };
     airtop: { configured: boolean; status: string };
     palmier: { configured: boolean; status: string };

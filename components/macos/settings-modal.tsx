@@ -143,7 +143,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               alignItems: 'center',
             }}>
               <span>
-                {selectedModel === 'local'
+                {selectedModel === 'omniroutes'
+                  ? 'Claude Opus 4.6 (OmniRoutes)'
+                  : selectedModel === 'local'
                   ? 'Local — Qwen 3.5 (Ollama)'
                   : selectedModel === 'kimi'
                   ? 'Kimi K2.6 (Moonshot AI)'
@@ -155,10 +157,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </span>
               <span style={{
                 fontSize: '11px',
-                color: selectedModel === 'local' ? '#059669' : selectedModel === 'kimi' ? '#9333EA' : '#1b7440',
+                color: selectedModel === 'local' ? '#059669' : selectedModel === 'omniroutes' ? '#D97706' : selectedModel === 'kimi' ? '#9333EA' : '#1b7440',
                 fontWeight: '600',
               }}>
-                {selectedModel === 'local' ? '🔒 100% Local' : selectedModel === 'kimi' ? '★ Kimi Active' : 'Active'}
+                {selectedModel === 'local' ? '🔒 100% Local' : selectedModel === 'omniroutes' ? '★ Claude Active' : selectedModel === 'kimi' ? '★ Kimi Active' : 'Active'}
               </span>
             </div>
           </div>

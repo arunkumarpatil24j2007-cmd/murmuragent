@@ -52,6 +52,11 @@ export const env = {
     baseUrl: process.env.LOCAL_MODEL_BASE_URL || 'http://127.0.0.1:11434/v1',
     model: process.env.LOCAL_MODEL_NAME || 'qwen3.5:latest',
   },
+  omniroutes: {
+    apiKey: process.env.OMNIROUTES_API_KEY || '',
+    model: process.env.OMNIROUTES_MODEL || 'aug/claude-opus-4.6',
+    baseUrl: process.env.OMNIROUTES_BASE_URL || 'http://localhost:20128/v1',
+  },
 
   // Browser
   airtop: {
@@ -97,7 +102,7 @@ export const env = {
 } as const;
 
 /** Check whether a provider is configured */
-export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'local' | 'airtop' | 'palmier' | 'notion' | 'vercel' | 'google' | 'supabase'): boolean {
+export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'omniroutes' | 'local' | 'airtop' | 'palmier' | 'notion' | 'vercel' | 'google' | 'supabase'): boolean {
   switch (provider) {
     case 'gemini':
       return !!env.gemini.apiKey;
@@ -105,6 +110,8 @@ export function isProviderConfigured(provider: 'gemini' | 'nvidia' | 'kimi' | 'l
       return !!env.nvidia.apiKey;
     case 'kimi':
       return !!env.kimi.apiKey;
+    case 'omniroutes':
+      return !!env.omniroutes.apiKey;
     case 'local':
       return !!env.local.baseUrl && !!env.local.model;
     case 'airtop':
