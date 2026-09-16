@@ -16,7 +16,7 @@ function toGeminiContents(messages: ModelMessage[]): Array<Record<string, unknow
         role: 'user',
         parts: [{
           functionResponse: {
-            name: m.toolName || m.toolCallId || 'unknown',
+            name: (m.toolName || m.toolCallId || 'unknown').replace(/\./g, '__'),
             response: { result: m.content },
           },
         }],
@@ -31,7 +31,7 @@ function toGeminiContents(messages: ModelMessage[]): Array<Record<string, unknow
           ...(m.content ? [{ text: m.content }] : []),
           ...m.toolCalls.map((tc) => ({
             functionCall: {
-              name: tc.tool,
+              name: tc.tool.replace(/\./g, '__'),
               args: tc.arguments,
             },
             ...(tc.thoughtSignature ? { thoughtSignature: tc.thoughtSignature } : {}),
@@ -56,15 +56,17 @@ function toGeminiTools(tools: ToolDefinition[]): Array<Record<string, unknown>> 
       const properties: Record<string, unknown> = {};
       const required: string[] = [];
       for (const p of t.parameters) {
+        const pType = p.type.toUpperCase();
         properties[p.name] = {
-          type: p.type.toUpperCase(),
+          type: pType === 'ARRAY' ? 'ARRAY' : pType,
           description: p.description,
+          ...(pType === 'ARRAY' ? { items: { type: 'STRING' } } : {}),
           ...(p.enum ? { enum: p.enum } : {}),
         };
         if (p.required) required.push(p.name);
       }
       return {
-        name: t.name,
+        name: t.name.replace(/\./g, '__'),
         description: t.description,
         parameters: {
           type: 'OBJECT',
@@ -172,7 +174,7 @@ export class GeminiProvider implements ModelProvider {
       if (part.functionCall) {
         toolCalls.push({
           id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          tool: part.functionCall.name,
+          tool: (part.functionCall.name || '').replace(/__/g, '.'),
           arguments: part.functionCall.args || {},
           thoughtSignature: part.thoughtSignature,
         });

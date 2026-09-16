@@ -7,7 +7,9 @@ import { z } from 'zod';
 export enum PermissionLevel {
   READ = 'READ',
   WRITE = 'WRITE',
-  DANGEROUS = 'DANGEROUS',
+  EXTERNAL_ACTION = 'EXTERNAL_ACTION',
+  DESTRUCTIVE = 'DESTRUCTIVE',
+  DANGEROUS = 'DANGEROUS', // alias for high-risk / confirmation actions
 }
 
 // ── Tool Types ────────────────────────────────────────
@@ -26,6 +28,8 @@ export interface ToolDefinition {
   parameters: ToolParameter[];
   permission: PermissionLevel;
   source: 'built-in' | 'mcp' | 'browser' | 'api';
+  requiresConfirmation?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
 }
 
 export interface ToolCall {
@@ -56,7 +60,8 @@ export type AgentEventType =
   | 'agent_text'
   | 'agent_completed'
   | 'agent_error'
-  | 'permission_required';
+  | 'permission_required'
+  | 'task_progress';
 
 export interface AgentEvent {
   type: AgentEventType;
@@ -74,6 +79,9 @@ export interface AgentEvent {
     text?: string;
     permission?: PermissionLevel;
     toolCallId?: string;
+    step?: string;
+    progress?: string;
+    requiresConfirmation?: boolean;
   };
 }
 
@@ -170,6 +178,15 @@ export const ChatRequestSchema = z.object({
   message: z.string().min(1),
   conversationId: z.string().optional(),
   model: z.string().optional(),
+  mode: z.enum(['chat', 'agent']).optional().default('agent'),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string(),
+      })
+    )
+    .optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

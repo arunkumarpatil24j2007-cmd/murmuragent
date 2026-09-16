@@ -118,7 +118,7 @@ export class KimiProvider implements ModelProvider {
   }
 
   get modelId(): string {
-    return this.customConfig?.model || env.kimi.model || process.env.KIMI_MODEL || 'moonshotai/kimi-k2.6:free';
+    return this.customConfig?.model || env.kimi.model || process.env.KIMI_MODEL || 'moonshotai/kimi-k2.6';
   }
 
   get baseUrl(): string {
@@ -168,7 +168,7 @@ export class KimiProvider implements ModelProvider {
         : [requestedModel],
       messages: openAIMessages,
       temperature: options?.temperature ?? 0.3,
-      max_tokens: options?.maxTokens ?? 4096,
+      max_tokens: options?.maxTokens ?? 2048,
     };
 
     if (options?.tools && options.tools.length > 0) {

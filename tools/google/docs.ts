@@ -69,6 +69,22 @@ const docsUpdate: ToolDefinition = {
   source: 'api',
 };
 
+const docsGenerateProposal: ToolDefinition = {
+  name: 'docs.generateProposal',
+  description:
+    'Generate a comprehensive, client-ready business proposal or project document in Google Docs. Includes Executive Summary, Scope of Work, Deliverables, Timeline, and Commercials.',
+  parameters: [
+    { name: 'clientName', type: 'string', description: 'Name of the client or company (e.g. "ABC Interiors", "Acme Corp")', required: true },
+    { name: 'title', type: 'string', description: 'Title of the proposal', required: false },
+    { name: 'scope', type: 'string', description: 'Overview of work or project objectives', required: false },
+    { name: 'deliverables', type: 'string', description: 'Key deliverables or phases', required: false },
+    { name: 'budget', type: 'string', description: 'Pricing or investment summary', required: false },
+  ],
+  permission: PermissionLevel.WRITE,
+  source: 'api',
+  riskLevel: 'low',
+};
+
 // MARK: - Registrations
 
 export function registerDocsTools(): void {
@@ -212,6 +228,83 @@ export function registerDocsTools(): void {
     } catch (err: any) {
       logger.error('DocsTool', 'Update doc failed', { error: String(err) });
       return { success: false, error: `Docs update error: ${err?.message || String(err)}` };
+    }
+  });
+
+  // 4. Generate Proposal
+  toolRegistry.register(docsGenerateProposal, async (args) => {
+    try {
+      const auth = await getAuthenticatedGoogleClient();
+      if (!auth) {
+        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      }
+
+      const clientName = (args.clientName as string) || 'Client';
+      const docTitle = (args.title as string) || `Project Proposal — ${clientName}`;
+      const scope = (args.scope as string) || 'Full-scope strategic consulting and implementation services tailored to client requirements.';
+      const deliverables = (args.deliverables as string) || 'Phase 1: Discovery & Architecture\nPhase 2: Core Development & Integration\nPhase 3: QA, Staging & Production Handover';
+      const budget = (args.budget as string) || 'Scope-based fixed milestones with milestone acceptance sign-offs.';
+
+      const content = [
+        `PROJECT PROPOSAL FOR ${clientName.toUpperCase()}`,
+        `Prepared on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+        '',
+        '1. EXECUTIVE SUMMARY',
+        `This proposal outlines the strategic roadmap, deliverables, and technical execution plan for ${clientName}. Our objective is to deliver high-impact, autonomous workflow integrations that streamline operations.`,
+        '',
+        '2. SCOPE OF WORK',
+        scope,
+        '',
+        '3. KEY DELIVERABLES & TIMELINE',
+        deliverables,
+        '',
+        '4. COMMERCIALS & INVESTMENT',
+        budget,
+        '',
+        '5. NEXT STEPS',
+        'Upon approval of this proposal, we will initiate Phase 1 Discovery and schedule the project kickoff meeting.',
+      ].join('\n');
+
+      const docs = google.docs({ version: 'v1', auth });
+
+      const createRes = await docs.documents.create({
+        requestBody: { title: docTitle },
+      });
+
+      const documentId = createRes.data.documentId;
+      if (!documentId) {
+        throw new Error('Google Docs API failed to return documentId');
+      }
+
+      await docs.documents.batchUpdate({
+        documentId,
+        requestBody: {
+          requests: [
+            {
+              insertText: {
+                location: { index: 1 },
+                text: `${content}\n`,
+              },
+            },
+          ],
+        },
+      });
+
+      const url = `https://docs.google.com/document/d/${documentId}/edit`;
+      return {
+        success: true,
+        result: {
+          documentId,
+          title: docTitle,
+          client: clientName,
+          url,
+          preview: content.slice(0, 400),
+          markdownLink: `[${docTitle}](${url})`,
+        },
+      };
+    } catch (err: any) {
+      logger.error('DocsTool', 'Generate proposal failed', { error: String(err) });
+      return { success: false, error: `Docs generateProposal error: ${err?.message || String(err)}` };
     }
   });
 }

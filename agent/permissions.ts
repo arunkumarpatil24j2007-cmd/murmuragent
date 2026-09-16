@@ -7,16 +7,22 @@ import { logger } from '@/lib/logger';
 /**
  * Determines whether a tool can execute automatically or requires user confirmation.
  *
- * READ    → always auto-execute
- * WRITE   → auto-execute (for now, can tighten later)
- * DANGEROUS → requires explicit user confirmation
+ * READ            → always auto-execute
+ * WRITE           → auto-execute unless requiresConfirmation is set
+ * EXTERNAL_ACTION → requires explicit user confirmation (sending email, publishing, etc.)
+ * DESTRUCTIVE     → requires explicit user confirmation (deleting files, cancelling meetings)
+ * DANGEROUS       → requires explicit user confirmation
  */
-export function canAutoExecute(tool: ToolDefinition): boolean {
+export function canAutoExecute(tool: ToolDefinition, isExplicitlyConfirmed = false): boolean {
+  if (isExplicitlyConfirmed) return true;
+  if (tool.requiresConfirmation) return false;
+
   switch (tool.permission) {
     case PermissionLevel.READ:
-      return true;
     case PermissionLevel.WRITE:
-      return true; // auto for V1; tighten later
+      return true;
+    case PermissionLevel.EXTERNAL_ACTION:
+    case PermissionLevel.DESTRUCTIVE:
     case PermissionLevel.DANGEROUS:
       return false;
     default:

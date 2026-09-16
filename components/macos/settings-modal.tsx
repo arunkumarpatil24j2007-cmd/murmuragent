@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 
 interface SettingsModalProps {
@@ -5,30 +7,15 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+type SettingsSection = 'general' | 'models' | 'voice' | 'privacy';
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const [selectedModel, setSelectedModel] = useState<string>('auto');
+  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
+  const [selectedModel, setSelectedModel] = useState<string>('omniroutes');
   const [localConnected, setLocalConnected] = useState<boolean>(true);
-  const [kimiDiagnostic, setKimiDiagnostic] = useState<{
-    model: string;
-    exactModelId: string;
-    provider: string;
-    connectionStatus: string;
-    lastLatencyMs?: number;
-    lastError?: string;
-  } | null>(null);
-  const [anthropicDiagnostic, setAnthropicDiagnostic] = useState<{
-    selectedModel: string;
-    provider: string;
-    requestedModel: string;
-    actualRequestModel: string;
-    responseModel: string;
-    requestId: string;
-    status: string;
-    latency: string;
-    toolCalls: number;
-    fallbackUsed: string;
-    lastError?: string;
-  } | null>(null);
+  const [temperature, setTemperature] = useState<number>(0.3);
+  const [streamEnabled, setStreamEnabled] = useState<boolean>(true);
+  const [voiceLanguage, setVoiceLanguage] = useState<string>('en-US');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -43,328 +30,367 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         setLocalConnected(data?.providers?.local?.status === 'available');
       })
       .catch(() => setLocalConnected(false));
-
-    fetch('/api/diagnostic')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.kimi) {
-          setKimiDiagnostic(data.kimi);
-        }
-        if (data?.anthropic) {
-          setAnthropicDiagnostic(data.anthropic);
-        }
-      })
-      .catch(() => {});
   }, [isOpen]);
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId);
+    try {
+      localStorage.setItem('murmur_selected_model', modelId);
+    } catch {}
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(39, 7, 17, 0.45)',
-      backdropFilter: 'blur(6px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999,
-      padding: '20px',
-    }}>
-      <div style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: '16px',
-        width: '100%',
-        maxWidth: '480px',
-        padding: '24px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-        border: '1px solid var(--mac-card-border)',
-      }}>
-        <div style={{
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(28, 11, 18, 0.35)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '20px',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '16px',
+          width: '100%',
+          maxWidth: '620px',
+          height: '460px',
+          boxShadow: 'var(--murmur-shadow-modal)',
+          border: '1px solid var(--murmur-border-solid)',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '18px',
-        }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--mac-plum)' }}>
-            Murmur Settings
-          </h3>
+          overflow: 'hidden',
+        }}
+      >
+        {/* Left Navigation */}
+        <div
+          style={{
+            width: '180px',
+            backgroundColor: 'var(--murmur-sidebar)',
+            borderRight: '1px solid var(--murmur-border)',
+            padding: '20px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                color: 'var(--murmur-text-muted)',
+                padding: '0 8px 12px 8px',
+              }}
+            >
+              Settings
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {[
+                { id: 'general' as SettingsSection, label: 'General' },
+                { id: 'models' as SettingsSection, label: 'AI & Models' },
+                { id: 'voice' as SettingsSection, label: 'Voice' },
+                { id: 'privacy' as SettingsSection, label: 'Privacy' },
+              ].map((s) => {
+                const isActive = activeSection === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setActiveSection(s.id)}
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: '7px',
+                      border: 'none',
+                      backgroundColor: isActive ? '#FFFFFF' : 'transparent',
+                      color: isActive ? 'var(--murmur-plum)' : 'var(--murmur-text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: isActive ? 600 : 500,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      boxShadow: isActive ? '0 1px 2px rgba(40, 8, 19, 0.05)' : 'none',
+                      transition: 'all 0.1s ease',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <button
+            type="button"
             onClick={onClose}
             style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '18px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: '1px solid var(--murmur-border)',
+              backgroundColor: 'transparent',
+              color: 'var(--murmur-text-secondary)',
+              fontSize: '12px',
               cursor: 'pointer',
-              color: 'var(--mac-text-secondary)',
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              User Profile
-            </label>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px',
-              marginTop: '6px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--mac-main-bg)',
-              border: '1px solid var(--mac-card-border)',
-            }}>
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--mac-plum)',
-                color: '#FFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: '700',
-              }}>
-                A
-              </div>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--mac-plum)' }}>Arunkumar</div>
-                <div style={{ fontSize: '11px', color: 'var(--mac-text-secondary)' }}>Account Active • Local Session</div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Active AI Model
-            </label>
-            <div style={{
-              marginTop: '6px',
-              padding: '10px 12px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--mac-main-bg)',
-              border: '1px solid var(--mac-card-border)',
-              fontSize: '13px',
-              fontWeight: '500',
-              color: 'var(--mac-plum)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <span>
-                {selectedModel === 'anthropic'
-                  ? 'Claude Opus 4.6 (Anthropic)'
-                  : selectedModel === 'omniroutes'
-                  ? 'Claude Opus 4.6 (OmniRoutes)'
-                  : selectedModel === 'local'
-                  ? 'Local — Qwen 3.5 (Ollama)'
-                  : selectedModel === 'kimi'
-                  ? 'Kimi K2.6 (Moonshot AI)'
-                  : selectedModel === 'gemini'
-                  ? 'Google Gemini (Flash)'
-                  : selectedModel === 'nvidia'
-                  ? 'NVIDIA AI (Llama 3.2 11B)'
-                  : 'Auto Router (Intelligent Failover)'}
-              </span>
-              <span style={{
-                fontSize: '11px',
-                color: (selectedModel === 'anthropic' || selectedModel === 'omniroutes') ? '#D97706' : selectedModel === 'local' ? '#059669' : selectedModel === 'kimi' ? '#9333EA' : '#1b7440',
-                fontWeight: '600',
-              }}>
-                {(selectedModel === 'anthropic' || selectedModel === 'omniroutes') ? '★ Claude Active' : selectedModel === 'local' ? '🔒 100% Local' : selectedModel === 'kimi' ? '★ Kimi Active' : 'Active'}
-              </span>
-            </div>
-          </div>
-
-          {/* Developer Diagnostic — Claude Opus 4.6 */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Developer Diagnostic — Claude Opus 4.6
-              </label>
-              <span style={{ fontSize: '10px', color: '#D97706', fontFamily: 'monospace', fontWeight: 600 }}>
-                claude-opus-4-6
-              </span>
-            </div>
-            <div style={{
-              marginTop: '6px',
-              padding: '10px 12px',
-              borderRadius: '10px',
-              backgroundColor: '#FFFBEB',
-              border: '1px solid #FDE68A',
-              fontSize: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              fontFamily: 'monospace',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#92400E' }}>Selected model:</span>
-                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.selectedModel || 'Claude Opus 4.6'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#92400E' }}>Provider:</span>
-                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.provider || 'anthropic'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#92400E' }}>Request model:</span>
-                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.actualRequestModel || 'claude-opus-4-6'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#92400E' }}>Response model:</span>
-                <span style={{ fontWeight: '600', color: '#78350F' }}>{anthropicDiagnostic?.responseModel || 'claude-opus-4-6'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#92400E' }}>Status:</span>
-                <span style={{ fontWeight: '600', color: anthropicDiagnostic?.status === 'SUCCESS' ? '#059669' : '#D97706' }}>
-                  {anthropicDiagnostic?.status || 'IDLE'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#92400E' }}>Fallback used:</span>
-                <span style={{ fontWeight: '600', color: '#059669' }}>{anthropicDiagnostic?.fallbackUsed || 'NO'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Developer Diagnostic — Kimi K2.6 (Development & Inspection) */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Developer Diagnostic — Kimi K2.6
-              </label>
-              <span style={{ fontSize: '10px', color: '#6B7280', fontFamily: 'monospace' }}>
-                moonshotai/kimi-k2.6:free
-              </span>
-            </div>
-            <div style={{
-              marginTop: '6px',
-              padding: '10px 12px',
-              borderRadius: '10px',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              fontSize: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              fontFamily: 'monospace',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748B' }}>Model:</span>
-                <span style={{ fontWeight: '600', color: '#0F172A' }}>Kimi K2.6</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748B' }}>Provider:</span>
-                <span style={{ fontWeight: '600', color: '#0F172A' }}>{kimiDiagnostic?.provider || 'kimi'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748B' }}>Connection Status:</span>
-                <span style={{
-                  fontWeight: '600',
-                  color: kimiDiagnostic?.connectionStatus === 'connected' ? '#059669' : '#D97706',
-                }}>
-                  {kimiDiagnostic?.connectionStatus === 'connected' ? '● Connected' : '○ Standby'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748B' }}>Last Latency:</span>
-                <span style={{ fontWeight: '600', color: '#0F172A' }}>
-                  {kimiDiagnostic?.lastLatencyMs ? `${(kimiDiagnostic.lastLatencyMs / 1000).toFixed(2)}s` : 'N/A'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Local Model Runtime (Ollama)
-            </label>
-            <div style={{
-              marginTop: '6px',
-              padding: '10px 12px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--mac-main-bg)',
-              border: '1px solid var(--mac-card-border)',
-              fontSize: '13px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <span style={{ color: 'var(--mac-plum)', fontSize: '12px' }}>
-                http://127.0.0.1:11434 • qwen3.5:latest
-              </span>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: localConnected ? '#059669' : '#DC2626',
-              }}>
-                {localConnected ? '● Connected' : '○ Disconnected'}
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--mac-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Keyboard Shortcut
-            </label>
-            <div style={{
-              marginTop: '6px',
-              padding: '10px 12px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--mac-main-bg)',
-              border: '1px solid var(--mac-card-border)',
-              fontSize: '13px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <span>Invoke Agent Anywhere</span>
-              <kbd style={{
-                backgroundColor: '#EDE6DE',
-                padding: '2px 7px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: '600',
-                border: '1px solid #DCD1C5',
-              }}>
-                ⌥ Space
-              </kbd>
-            </div>
-          </div>
-
-          <div style={{
-            fontSize: '11px',
-            color: 'var(--mac-text-tertiary)',
-            lineHeight: 1.4,
-            paddingTop: '8px',
-          }}>
-            All API credentials (Gemini, NVIDIA, Vercel, Notion, Airtop) remain strictly server-side. No client keys are exposed.
-          </div>
-        </div>
-
-        <div style={{ marginTop: '22px', display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            style={{
-              backgroundColor: 'var(--mac-plum)',
-              color: '#FFFFFF',
-              border: 'none',
-              padding: '8px 18px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
+              textAlign: 'center',
             }}
           >
             Done
           </button>
+        </div>
+
+        {/* Right Content Area */}
+        <div
+          style={{
+            flex: 1,
+            padding: '24px 28px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {activeSection === 'general' && (
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--murmur-plum)', marginBottom: '16px' }}>
+                Account & Appearance
+              </h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Account
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                      arunkumarpatil24j2007@gmail.com
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--murmur-text-secondary)', fontWeight: 500 }}>
+                    Active
+                  </span>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Application Version
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                      Murmur 2.0 Web Client
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--murmur-text-secondary)' }}>
+                    v2.1.0-release
+                  </span>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Global Keyboard Shortcut
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                      Focus input from anywhere
+                    </div>
+                  </div>
+                  <kbd style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--murmur-sidebar)', border: '1px solid var(--murmur-border)' }}>
+                    ⌥ Space
+                  </kbd>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'models' && (
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--murmur-plum)', marginBottom: '16px' }}>
+                AI Model Preferences
+              </h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--murmur-text-primary)', marginBottom: '6px' }}>
+                    Default Model for Normal Chat
+                  </div>
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--murmur-border-solid)',
+                      backgroundColor: 'var(--murmur-sidebar)',
+                      fontSize: '13px',
+                      color: 'var(--murmur-text-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <span>Claude Opus 4.6 (OmniRoute)</span>
+                    <span style={{ fontSize: '11px', color: '#10B981', fontWeight: 600 }}>Active</span>
+                  </div>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--murmur-text-primary)', marginBottom: '6px' }}>
+                    Agent Execution Model
+                  </div>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => handleModelChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--murmur-border-solid)',
+                      backgroundColor: '#FFFFFF',
+                      fontSize: '13px',
+                      color: 'var(--murmur-text-primary)',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="omniroutes">Claude Opus 4.6 (OmniRoute)</option>
+                    <option value="auto">Auto Router (Dynamic)</option>
+                    <option value="gemini">Google Gemini 3.0</option>
+                    <option value="nvidia">NVIDIA AI (Llama 3.2)</option>
+                    <option value="local">Local Qwen 3.5 (Ollama)</option>
+                  </select>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Streaming Responses
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                      Stream text tokens in real-time
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={streamEnabled}
+                    onChange={(e) => setStreamEnabled(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'voice' && (
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--murmur-plum)', marginBottom: '16px' }}>
+                Voice & Dictation
+              </h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--murmur-text-primary)', marginBottom: '6px' }}>
+                    Speech Recognition Language
+                  </div>
+                  <select
+                    value={voiceLanguage}
+                    onChange={(e) => setVoiceLanguage(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--murmur-border-solid)',
+                      backgroundColor: '#FFFFFF',
+                      fontSize: '13px',
+                      color: 'var(--murmur-text-primary)',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="en-IN">English (India)</option>
+                  </select>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <p style={{ fontSize: '12.5px', color: 'var(--murmur-text-secondary)', lineHeight: 1.5 }}>
+                  Click the microphone button in the input or press the dictate shortcut to speak your requests. Audio is transcribed on-device by your browser.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'privacy' && (
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--murmur-plum)', marginBottom: '16px' }}>
+                Privacy & Data Isolation
+              </h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Local Privacy Isolation
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                      {localConnected ? 'Ollama running on Mac' : 'Ollama not detected'}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      color: localConnected ? '#047857' : '#B91C1C',
+                      backgroundColor: localConnected ? '#ECFDF5' : '#FEF2F2',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                    }}
+                  >
+                    {localConnected ? 'Available' : 'Offline'}
+                  </span>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Token Encryption
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                      Connector credentials protected
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--murmur-plum)' }}>
+                    AES-256-GCM
+                  </span>
+                </div>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />
+
+                <p style={{ fontSize: '12px', color: 'var(--murmur-text-muted)', lineHeight: 1.5 }}>
+                  Murmur keeps all secrets and tokens server-side. No API keys or OAuth secrets are ever transmitted to the client browser.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

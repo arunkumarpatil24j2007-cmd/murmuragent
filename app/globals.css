@@ -3,33 +3,60 @@
 @import "tailwindcss";
 
 :root {
-  /* macOS Murmur color palette matching design reference */
-  --mac-sidebar-bg: #F5EBE1;
-  --mac-sidebar-border: #EADBCE;
-  --mac-sidebar-active: #E8DACB;
-  --mac-sidebar-hover: #EFE4D6;
-  
-  --mac-main-bg: #FAF9F6;
-  --mac-card-bg: #FFFFFF;
-  --mac-card-border: #ECE4D9;
-  
-  --mac-plum: #280813;
-  --mac-plum-hover: #3A0D1D;
+  /* Murmur 2.0 Minimal & Warm Editorial Design Tokens */
+  --murmur-canvas: #FBF9F5;
+  --murmur-surface: #FFFFFF;
+  --murmur-sidebar: #F5EFE6;
+  --murmur-sidebar-hover: #EFE8DE;
+  --murmur-sidebar-active: #E7DED2;
+  --murmur-border: rgba(40, 8, 19, 0.08);
+  --murmur-border-subtle: rgba(40, 8, 19, 0.04);
+  --murmur-border-solid: #EAE2D7;
+
+  --murmur-plum: #2D0D19;
+  --murmur-plum-hover: #3F1425;
+  --murmur-plum-muted: #541E33;
+  --murmur-tag-bg: rgba(45, 13, 25, 0.05);
+
+  --murmur-text-primary: #1C0B12;
+  --murmur-text-secondary: #6B5E55;
+  --murmur-text-tertiary: #9E9086;
+  --murmur-text-muted: #B8ACA2;
+
+  --murmur-user-msg: #F4ECE2;
+  --murmur-code-bg: #F5EFE8;
+
+  --murmur-radius-sm: 8px;
+  --murmur-radius-md: 14px;
+  --murmur-radius-lg: 20px;
+  --murmur-radius-full: 9999px;
+
+  --murmur-shadow-subtle: 0 1px 3px rgba(40, 8, 19, 0.03), 0 1px 2px rgba(40, 8, 19, 0.02);
+  --murmur-shadow-card: 0 4px 16px -4px rgba(40, 8, 19, 0.04), 0 1px 2px rgba(40, 8, 19, 0.03);
+  --murmur-shadow-modal: 0 20px 48px -10px rgba(40, 8, 19, 0.14), 0 2px 8px rgba(40, 8, 19, 0.06);
+
+  /* Legacy aliases for backwards compatibility */
+  --mac-sidebar-bg: var(--murmur-sidebar);
+  --mac-sidebar-border: var(--murmur-border-solid);
+  --mac-sidebar-active: var(--murmur-sidebar-active);
+  --mac-sidebar-hover: var(--murmur-sidebar-hover);
+  --mac-main-bg: var(--murmur-canvas);
+  --mac-card-bg: var(--murmur-surface);
+  --mac-card-border: var(--murmur-border-solid);
+  --mac-plum: var(--murmur-plum);
+  --mac-plum-hover: var(--murmur-plum-hover);
   --mac-plum-light: #441324;
   --mac-tag-pink: #D9657B;
-  
-  --mac-text-primary: #1C0B12;
-  --mac-text-secondary: #6F6258;
-  --mac-text-tertiary: #9A8E85;
-  --mac-text-muted: #B8ADA4;
+  --mac-text-primary: var(--murmur-text-primary);
+  --mac-text-secondary: var(--murmur-text-secondary);
+  --mac-text-tertiary: var(--murmur-text-tertiary);
+  --mac-text-muted: var(--murmur-text-muted);
 
-  /* Traffic lights */
   --mac-traffic-close: #FF5F56;
   --mac-traffic-minimize: #FFBD2E;
   --mac-traffic-maximize: #27C93F;
 
-  /* Window styling */
-  --mac-window-shadow: 0 24px 70px rgba(40, 8, 19, 0.12), 0 10px 25px rgba(0, 0, 0, 0.06);
+  --mac-window-shadow: var(--murmur-shadow-card);
   --mac-window-radius: 16px;
 }
 
@@ -43,17 +70,17 @@ html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background-color: #E8DFD5; /* Desktop backdrop behind the macOS window */
+  background-color: var(--murmur-canvas);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: var(--mac-text-primary);
+  color: var(--murmur-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* Custom minimal scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -61,12 +88,85 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(111, 98, 88, 0.2);
-  border-radius: 3px;
+  background: rgba(107, 94, 85, 0.2);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(111, 98, 88, 0.35);
+  background: rgba(107, 94, 85, 0.35);
+}
+
+/* Typography styles for assistant responses */
+.prose-editorial {
+  color: var(--murmur-text-primary);
+  line-height: 1.65;
+  font-size: 15px;
+}
+
+.prose-editorial p {
+  margin-bottom: 14px;
+}
+
+.prose-editorial p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-editorial h1,
+.prose-editorial h2,
+.prose-editorial h3 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--murmur-plum);
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+.prose-editorial h1 { font-size: 20px; }
+.prose-editorial h2 { font-size: 17px; }
+.prose-editorial h3 { font-size: 15px; }
+
+.prose-editorial ul,
+.prose-editorial ol {
+  margin-left: 20px;
+  margin-bottom: 14px;
+}
+
+.prose-editorial li {
+  margin-bottom: 4px;
+}
+
+.prose-editorial pre {
+  background-color: var(--murmur-code-bg);
+  border: 1px solid var(--murmur-border-solid);
+  border-radius: var(--murmur-radius-md);
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 14px 0;
+}
+
+.prose-editorial code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  background-color: rgba(45, 13, 25, 0.05);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.prose-editorial pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.prose-editorial blockquote {
+  border-left: 3px solid var(--murmur-plum);
+  padding-left: 14px;
+  margin: 12px 0;
+  color: var(--murmur-text-secondary);
+  font-style: italic;
 }
 
 /* Animations */
@@ -75,55 +175,15 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulseGently {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(0.96); }
-}
-
-@keyframes waveBar {
-  0%, 100% { height: 4px; }
-  50% { height: 16px; }
-}
-
-@keyframes recordPulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.8; }
-}
-
-@keyframes globeShine {
-  0%, 100% { filter: drop-shadow(0 0 3px rgba(74, 144, 226, 0.4)); }
-  50% { filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.85)); }
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.animate-pulse-gentle {
-  animation: pulseGently 1.8s infinite ease-in-out;
-}
-
-.animate-record-pulse {
-  animation: recordPulse 1.4s infinite ease-in-out;
-}
-
-.animate-globe-glow {
-  animation: globeShine 3s infinite ease-in-out;
-}
-
-/* Apple Notch Spring Transitions */
-.notch-spring {
-  transition: all 420ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .notch-spring,
-  .animate-fade-in,
-  .animate-pulse-gentle,
-  .animate-record-pulse,
-  .animate-globe-glow {
-    animation: none !important;
-    transition: opacity 150ms ease-out, transform 150ms ease-out !important;
-  }
+.animate-pulse-subtle {
+  animation: pulseSubtle 1.8s infinite ease-in-out;
 }

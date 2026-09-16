@@ -3,7 +3,7 @@
 
 import { NextRequest } from 'next/server';
 import { v4 as uuid } from 'uuid';
-import { processMessage } from '@/agent/agent';
+import { processMessage, processChatMessage } from '@/agent/agent';
 import { ChatRequestSchema } from '@/lib/schemas';
 import type { AgentEvent } from '@/lib/schemas';
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { message, conversationId: inputConvId, model } = parsed.data;
+    const { message, conversationId: inputConvId, model, mode, history } = parsed.data;
     const conversationId = inputConvId || uuid();
 
     // Create a ReadableStream for SSE
@@ -38,20 +38,36 @@ export async function POST(req: NextRequest) {
         };
 
         try {
-          const result = await processMessage(message, conversationId, emit, model, req.signal);
+          if (mode === 'chat') {
+            const chatResult = await processChatMessage(message, conversationId, emit, model, history, req.signal);
+            const finalEvent = {
+              type: 'final_response' as const,
+              timestamp: new Date().toISOString(),
+              data: {
+                conversationId,
+                content: chatResult.content,
+                model: chatResult.model,
+                mode: 'chat',
+              },
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalEvent)}\n\n`));
+          } else {
+            const result = await processMessage(message, conversationId, emit, model, req.signal);
 
-          // Send final message
-          const finalEvent = {
-            type: 'final_response' as const,
-            timestamp: new Date().toISOString(),
-            data: {
-              conversationId,
-              content: result.content,
-              model: result.model,
-              taskId: result.taskState.id,
-            },
-          };
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalEvent)}\n\n`));
+            // Send final message
+            const finalEvent = {
+              type: 'final_response' as const,
+              timestamp: new Date().toISOString(),
+              data: {
+                conversationId,
+                content: result.content,
+                model: result.model,
+                taskId: result.taskState.id,
+                mode: 'agent',
+              },
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalEvent)}\n\n`));
+          }
         } catch (err) {
           const errorEvent = {
             type: 'agent_error' as const,

@@ -95,7 +95,7 @@ const calendarCreateEvent: ToolDefinition = {
 
 const calendarDeleteEvent: ToolDefinition = {
   name: 'calendar.deleteEvent',
-  description: 'Delete or cancel an existing event on Google Calendar by event ID.',
+  description: 'Delete or cancel an existing event on Google Calendar by event ID. Requires explicit confirmation.',
   parameters: [
     {
       name: 'eventId',
@@ -104,8 +104,37 @@ const calendarDeleteEvent: ToolDefinition = {
       required: true,
     },
   ],
-  permission: PermissionLevel.DANGEROUS,
+  permission: PermissionLevel.DESTRUCTIVE,
+  requiresConfirmation: true,
+  riskLevel: 'high',
   source: 'api',
+};
+
+const calendarUpdateEvent: ToolDefinition = {
+  name: 'calendar.updateEvent',
+  description: 'Update or modify an existing Google Calendar event summary, description, or start/end time.',
+  parameters: [
+    { name: 'eventId', type: 'string', description: 'The unique ID of the Google Calendar event', required: true },
+    { name: 'summary', type: 'string', description: 'Updated title/summary', required: false },
+    { name: 'description', type: 'string', description: 'Updated description/notes', required: false },
+    { name: 'startTime', type: 'string', description: 'New ISO startTime', required: false },
+    { name: 'endTime', type: 'string', description: 'New ISO endTime', required: false },
+  ],
+  permission: PermissionLevel.WRITE,
+  source: 'api',
+  riskLevel: 'low',
+};
+
+const calendarMeetingPrep: ToolDefinition = {
+  name: 'calendar.meetingPrep',
+  description: 'Prepare a comprehensive meeting briefing for an upcoming meeting tomorrow or today. Inspects attendees, relevant email threads, and compiles open action items.',
+  parameters: [
+    { name: 'query', type: 'string', description: 'Meeting title or person name to search for (e.g. "Rahul", "Sync")', required: false },
+    { name: 'date', type: 'string', description: 'Target date or relative term ("today", "tomorrow", or ISO date)', required: false },
+  ],
+  permission: PermissionLevel.READ,
+  source: 'api',
+  riskLevel: 'low',
 };
 
 // MARK: - Registration
@@ -275,5 +304,138 @@ export function registerCalendarTools(): void {
     }
   });
 
-  logger.info('CalendarTools', 'Google Calendar tools registered (listEvents, createEvent, deleteEvent)');
+  // 4. calendar.updateEvent
+  toolRegistry.register(calendarUpdateEvent, async (args) => {
+    const auth = await getAuthenticatedGoogleClient();
+    if (!auth) {
+      return {
+        success: false,
+        error: 'Google Workspace is not connected. Please connect via /api/auth/google/login',
+      };
+    }
+
+    try {
+      const calendar = google.calendar({ version: 'v3', auth });
+      const eventId = String(args.eventId);
+
+      const patchBody: any = {};
+      if (args.summary) patchBody.summary = String(args.summary);
+      if (args.description) patchBody.description = String(args.description);
+      if (args.startTime) patchBody.start = { dateTime: String(args.startTime) };
+      if (args.endTime) patchBody.end = { dateTime: String(args.endTime) };
+
+      const res = await calendar.events.patch({
+        calendarId: 'primary',
+        eventId,
+        requestBody: patchBody,
+      });
+
+      return {
+        success: true,
+        event: {
+          id: res.data.id,
+          summary: res.data.summary,
+          htmlLink: res.data.htmlLink,
+          updated: res.data.updated,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, error: `Failed to update event: ${err?.message || String(err)}` };
+    }
+  });
+
+  // 5. calendar.meetingPrep
+  toolRegistry.register(calendarMeetingPrep, async (args) => {
+    const auth = await getAuthenticatedGoogleClient();
+    if (!auth) {
+      return {
+        success: false,
+        error: 'Google Workspace is not connected. Please connect via /api/auth/google/login',
+      };
+    }
+
+    try {
+      const calendar = google.calendar({ version: 'v3', auth });
+      const now = new Date();
+      let timeMin = now.toISOString();
+      let timeMax = new Date(now.getTime() + 48 * 3600 * 1000).toISOString();
+
+      const dateStr = String(args.date || '').toLowerCase();
+      if (dateStr.includes('tomorrow')) {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        timeMin = tomorrow.toISOString();
+        const tomorrowEnd = new Date(tomorrow);
+        tomorrowEnd.setHours(23, 59, 59, 999);
+        timeMax = tomorrowEnd.toISOString();
+      }
+
+      const res = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+        q: args.query ? String(args.query) : undefined,
+      });
+
+      const events = res.data.items || [];
+      if (events.length === 0) {
+        return {
+          success: true,
+          result: {
+            message: `No scheduled meetings found matching "${args.query || 'upcoming'}" for the specified window.`,
+            eventsFound: 0,
+          },
+        };
+      }
+
+      const topMeeting = events[0];
+      const attendees = topMeeting.attendees?.map((a) => a.email).filter(Boolean) || [];
+
+      // Look for recent emails with top attendee if Gmail is accessible
+      let recentEmailSnippets: string[] = [];
+      if (attendees.length > 0) {
+        try {
+          const gmail = google.gmail({ version: 'v1', auth });
+          const mailRes = await gmail.users.messages.list({
+            userId: 'me',
+            q: `from:${attendees[0]} OR to:${attendees[0]}`,
+            maxResults: 3,
+          });
+          const msgIds = mailRes.data.messages || [];
+          for (const m of msgIds) {
+            const msg = await gmail.users.messages.get({ userId: 'me', id: m.id!, format: 'metadata', metadataHeaders: ['Subject'] });
+            recentEmailSnippets.push(msg.data.snippet || '');
+          }
+        } catch {}
+      }
+
+      return {
+        success: true,
+        result: {
+          meetingTitle: topMeeting.summary || 'Meeting',
+          startTime: topMeeting.start?.dateTime || topMeeting.start?.date,
+          endTime: topMeeting.end?.dateTime || topMeeting.end?.date,
+          attendees,
+          location: topMeeting.location || 'Online',
+          htmlLink: topMeeting.htmlLink,
+          recentEmailContext: recentEmailSnippets.length > 0 ? recentEmailSnippets : undefined,
+          briefing: {
+            overview: `Meeting with ${attendees.join(', ') || 'team'} regarding ${topMeeting.summary}.`,
+            suggestedPoints: [
+              'Review project status and latest milestones',
+              'Address any open deliverables or blockers',
+              'Agree on next steps and ownership',
+            ],
+          },
+        },
+      };
+    } catch (err: any) {
+      return { success: false, error: `Meeting prep failed: ${err?.message || String(err)}` };
+    }
+  });
+
+  logger.info('CalendarTools', 'Google Calendar tools registered (listEvents, createEvent, deleteEvent, updateEvent, meetingPrep)');
 }

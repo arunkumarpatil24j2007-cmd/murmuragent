@@ -24,6 +24,9 @@ import { registerVercelTools } from '@/tools/vercel';
 import { registerGitHubTools } from '@/tools/github';
 import { registerCalculatorTools } from '@/tools/calculator';
 import { registerBrowserTools } from '@/browser/browser-agent';
+import { registerWebTools } from '@/tools/web';
+import { registerFilesTools } from '@/tools/files';
+import { registerSocialTools } from '@/tools/social';
 import { initializeMCP } from '@/mcp/registry';
 
 let initialized = false;
@@ -43,6 +46,9 @@ export async function initializeAgent(): Promise<void> {
   registerDocsTools();
   registerSheetsTools();
   registerCalendarTools();
+  registerWebTools();
+  registerFilesTools();
+  registerSocialTools();
   registerNotionTools();
   registerVercelTools();
   registerGitHubTools();
@@ -328,5 +334,107 @@ export async function processMessage(
       model: taskState.model,
       taskState,
     };
+  }
+}
+
+/**
+ * Process a normal conversational message without tools, planners, or agent loops.
+ * Powered by Claude Opus 4.6 (via OmniRoute / Anthropic provider).
+ * Retains conversation history across turns.
+ */
+export async function processChatMessage(
+  message: string,
+  conversationId: string,
+  emit: (event: AgentEvent) => void,
+  modelPreference: string = 'omniroutes',
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  signal?: AbortSignal
+): Promise<{ content: string; model: string; conversationId: string }> {
+  const taskId = uuid();
+
+  // Get or initialize conversation memory
+  if (!conversationMemory.has(conversationId)) {
+    conversationMemory.set(conversationId, new ShortTermMemory());
+  }
+  const memory = conversationMemory.get(conversationId)!;
+
+  // If client supplied history, sync if memory has fewer items
+  if (history && Array.isArray(history) && history.length > 0) {
+    const existing = memory.getAll();
+    if (existing.length < history.length) {
+      memory.clear();
+      for (const h of history) {
+        memory.add({ role: h.role, content: h.content });
+      }
+    }
+  }
+
+  // Add the current user turn
+  memory.add({ role: 'user', content: message });
+
+  const messages = memory.getAll();
+
+  try {
+    const provider = await selectProvider(modelPreference, message);
+    const modelDisplayName = provider.metadata.name;
+
+    emit({
+      type: 'model_selected',
+      timestamp: new Date().toISOString(),
+      data: { model: modelDisplayName, taskId },
+    });
+
+    emit({
+      type: 'agent_thinking',
+      timestamp: new Date().toISOString(),
+      data: { taskId, status: `Thinking with ${modelDisplayName}...` },
+    });
+
+    const systemPrompt = `You are ${modelDisplayName} in Murmur. You are in Normal Chat Mode. Engage in direct, intelligent, articulate conversation. Provide in-depth reasoning, clear explanations, and complete code solutions when requested. Do not invoke external tools or agent planners.`;
+
+    const result = await executeWithFailover(
+      messages,
+      {
+        systemPrompt,
+        temperature: 0.3,
+      },
+      provider,
+      message
+    );
+
+    const content = result.response.content;
+
+    // Add assistant response to memory
+    memory.add({ role: 'assistant', content });
+
+    // Emit final text
+    emit({
+      type: 'agent_text',
+      timestamp: new Date().toISOString(),
+      data: { text: content, taskId },
+    });
+
+    emit({
+      type: 'agent_completed',
+      timestamp: new Date().toISOString(),
+      data: { taskId },
+    });
+
+    return {
+      content,
+      model: modelDisplayName,
+      conversationId,
+    };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.error('Agent', 'Normal chat error', { error: errorMsg });
+
+    emit({
+      type: 'agent_error',
+      timestamp: new Date().toISOString(),
+      data: { error: errorMsg, taskId },
+    });
+
+    throw err;
   }
 }

@@ -16,12 +16,16 @@ export function routeRequest(message: string): RouteDecision {
 
   // Check if the message likely needs tools
   const toolIndicators = [
-    'email', 'gmail', 'mail',
-    'doc', 'document', 'google doc',
-    'sheet', 'spreadsheet', 'google sheet',
+    'email', 'gmail', 'mail', 'inbox', 'unanswered',
+    'doc', 'document', 'google doc', 'proposal',
+    'sheet', 'spreadsheet', 'google sheet', 'leads', 'prospects',
+    'calendar', 'meeting', 'schedule', 'tomorrow', 'event',
     'notion', 'page',
     'vercel', 'deploy', 'deployment',
-    'browse', 'website', 'open', 'navigate', 'search the web',
+    'browse', 'website', 'open', 'navigate', 'search', 'research',
+    'company', 'companies', 'competitor', 'competitors',
+    'linkedin', 'post', 'publish', 'social', 'calendar',
+    'csv', 'table', 'compare', 'summarize', 'draft',
     'create', 'write', 'send', 'check', 'find', 'list',
     'read', 'get', 'update',
   ];

@@ -4,76 +4,93 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { AgentEvent } from '@/lib/schemas';
 import { Composer } from '@/components/composer';
-import { FormattedMessage, WorkArtifactCards, ToolResultLinkBadge, extractWorkArtifacts } from '@/components/work-artifact';
+import { FormattedMessage, WorkArtifactCards, extractWorkArtifacts } from '@/components/work-artifact';
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  mode?: 'chat' | 'agent';
   events?: AgentEvent[];
   model?: string;
+  isError?: boolean;
 }
 
 interface AgentConsoleProps {
   onStatusChange?: (status: 'idle' | 'thinking' | 'executing' | 'error') => void;
   composerRef?: React.RefObject<HTMLTextAreaElement | null>;
   searchQuery?: string;
+  onNewConversation?: () => void;
+  conversationId?: string;
 }
 
-const EXAMPLE_PROMPTS = [
-  { label: 'List my Vercel projects', prompt: 'List all my Vercel projects and their latest deployment status' },
-  { label: 'Search Notion workspace', prompt: 'Search my Notion workspace for project notes' },
-  { label: 'Check my emails', prompt: 'Search Gmail for recent emails' },
-  { label: 'Create Google Doc', prompt: 'Create a Google Doc titled "Murmur Agent Architecture" with an outline' },
-  { label: 'Browse web page', prompt: 'Navigate to https://news.ycombinator.com and extract top 3 stories' },
+const PROMPT_SUGGESTIONS = [
+  { label: 'Explain recursion with a C example', mode: 'chat' as const, prompt: 'Explain recursion and provide an example in C.' },
+  { label: 'Capital of France', mode: 'chat' as const, prompt: 'What is the capital of France?' },
+  { label: 'Calculate 847 × 293', mode: 'agent' as const, prompt: 'Calculate 847 * 293' },
+  { label: 'Search my Google Drive', mode: 'agent' as const, prompt: 'Search my Google Drive for recent documents' },
 ];
 
 export function AgentConsole({
   onStatusChange,
   composerRef: externalComposerRef,
   searchQuery = '',
+  conversationId: propConversationId,
 }: AgentConsoleProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversationId] = useState(() => uuid());
-  const MODEL_LABEL_MAP: Record<string, string> = {
-    auto: 'Auto Router',
-    gemini: 'Google Gemini',
-    nvidia: 'NVIDIA AI',
-    kimi: 'Kimi K2.6',
-    anthropic: 'Claude Opus 4.6',
-    omniroutes: 'Claude Opus 4.6',
-    local: 'Local — Qwen 3.5',
-  };
-
+  const [conversationId, setConversationId] = useState(() => propConversationId || uuid());
+  const [mode, setMode] = useState<'chat' | 'agent'>('chat');
   const [status, setStatus] = useState<'idle' | 'thinking' | 'executing' | 'error'>('idle');
-  const [currentModel, setCurrentModel] = useState<string>('Auto Router');
-  const [selectedModel, setSelectedModel] = useState<string>('auto');
-  const [pendingEvents, setPendingEvents] = useState<AgentEvent[]>([]);
+  const [currentModel, setCurrentModel] = useState<string>('Claude Opus 4.6');
+  const [selectedModel, setSelectedModel] = useState<string>('omniroutes');
+  const [liveStreamText, setLiveStreamText] = useState<string>('');
+  const [agentStepStatus, setAgentStepStatus] = useState<string>('');
+  const [activeSteps, setActiveSteps] = useState<Array<{ name: string; status: 'running' | 'completed' | 'failed' }>>([]);
+  const [pendingConfirmation, setPendingConfirmation] = useState<{ action: string; tool: string } | null>(null);
 
-  // Load persisted model preference from localStorage
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const internalComposerRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = externalComposerRef || internalComposerRef;
+
+  // Persist model & mode preferences
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('murmur_selected_model');
-      if (saved) {
-        setSelectedModel(saved);
-        setCurrentModel(MODEL_LABEL_MAP[saved] || saved);
+      const savedMode = localStorage.getItem('murmur_mode') as 'chat' | 'agent' | null;
+      if (savedMode && (savedMode === 'chat' || savedMode === 'agent')) {
+        setMode(savedMode);
       }
+      const savedModel = localStorage.getItem('murmur_selected_model');
+      if (savedModel) {
+        setSelectedModel(savedModel);
+      }
+    } catch {}
+  }, []);
+
+  const handleModeChange = useCallback((newMode: 'chat' | 'agent') => {
+    setMode(newMode);
+    try {
+      localStorage.setItem('murmur_mode', newMode);
     } catch {}
   }, []);
 
   const handleSelectModel = useCallback((modelId: string) => {
     setSelectedModel(modelId);
-    setCurrentModel(MODEL_LABEL_MAP[modelId] || modelId);
+    const labels: Record<string, string> = {
+      omniroutes: 'Claude Opus 4.6',
+      anthropic: 'Claude Opus 4.6',
+      kimi: 'Kimi K2.6',
+      auto: 'Auto Router',
+      gemini: 'Google Gemini',
+      nvidia: 'NVIDIA AI',
+      local: 'Local Qwen 3.5',
+    };
+    setCurrentModel(labels[modelId] || modelId);
     try {
       localStorage.setItem('murmur_selected_model', modelId);
     } catch {}
   }, []);
-  
-  const internalComposerRef = useRef<HTMLTextAreaElement>(null);
-  const composerRef = externalComposerRef || internalComposerRef;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,7 +98,7 @@ export function AgentConsole({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, pendingEvents, scrollToBottom]);
+  }, [messages, liveStreamText, scrollToBottom]);
 
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
@@ -90,511 +107,781 @@ export function AgentConsole({
     }
     setStatus('idle');
     onStatusChange?.('idle');
-    setPendingEvents([]);
+    setLiveStreamText('');
+    setAgentStepStatus('');
 
     setMessages((prev) => [
       ...prev,
       {
         id: uuid(),
         role: 'assistant',
-        content: '⏹ Action terminated by user.',
+        content: 'Generation stopped.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mode,
       },
     ]);
-  }, [onStatusChange]);
+  }, [mode, onStatusChange]);
 
   const isProcessing = status === 'thinking' || status === 'executing';
 
-  // Global shortcut: ⌥ Space focuses input, Escape terminates running action
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.code === 'Space') {
-        e.preventDefault();
-        composerRef.current?.focus();
-      } else if (e.key === 'Escape' && isProcessing) {
-        e.preventDefault();
-        handleStop();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [composerRef, isProcessing, handleStop]);
+  const handleSend = useCallback(
+    async (text: string, overrideMode?: 'chat' | 'agent') => {
+      const activeMode = overrideMode || mode;
+      const trimmed = text.trim();
+      if (!trimmed) return;
 
-  // Handle external link clicks to open in default macOS browser via native bridge
-  useEffect(() => {
-    const handleLinkClick = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement)?.closest('a');
-      if (target && target.href && (target.href.startsWith('http://') || target.href.startsWith('https://'))) {
-        if (!target.href.includes(window.location.host)) {
-          e.preventDefault();
-          if ((window as any).webkit?.messageHandlers?.murmurNative) {
-            (window as any).webkit.messageHandlers.murmurNative.postMessage({
-              type: 'open_url',
-              url: target.href,
-            });
-          } else {
-            window.open(target.href, '_blank', 'noopener,noreferrer');
-          }
+      const userMsg: ChatMessage = {
+        id: uuid(),
+        role: 'user',
+        content: trimmed,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mode: activeMode,
+      };
+
+      const updatedMessages = [...messages, userMsg];
+      setMessages(updatedMessages);
+      setStatus('thinking');
+      onStatusChange?.('thinking');
+      setLiveStreamText('');
+      setAgentStepStatus(activeMode === 'chat' ? 'Thinking...' : 'Planning task...');
+      setActiveSteps([]);
+      setPendingConfirmation(null);
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      // Extract conversation history for multi-turn context
+      const historyPayload = updatedMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            message: trimmed,
+            conversationId,
+            model: selectedModel,
+            mode: activeMode,
+            history: historyPayload,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Service returned HTTP ${response.status}`);
         }
-      }
-    };
-    document.addEventListener('click', handleLinkClick);
-    return () => document.removeEventListener('click', handleLinkClick);
-  }, []);
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!text.trim()) return;
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response stream available.');
 
-    const userMsg: ChatMessage = {
-      id: uuid(),
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let assistantContent = '';
+        let modelUsed = currentModel;
+        const collectedEvents: AgentEvent[] = [];
 
-    setMessages((prev) => [...prev, userMsg]);
-    setStatus('thinking');
-    onStatusChange?.('thinking');
-    setPendingEvents([]);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          message: text.trim(),
-          conversationId,
-          model: selectedModel,
-        }),
-      });
+          for (const line of lines) {
+            const lineTrimmed = line.trim();
+            if (lineTrimmed.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(lineTrimmed.slice(6));
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
+                if (event.type === 'model_selected' && event.data?.model) {
+                  modelUsed = event.data.model;
+                  setCurrentModel(event.data.model);
+                }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response stream');
+                if (event.type === 'tool_started') {
+                  setStatus('executing');
+                  onStatusChange?.('executing');
+                  const toolName = event.data?.action || event.data?.tool || 'tool';
+                  setAgentStepStatus(`Using ${toolName}...`);
+                  setActiveSteps((prev) => [
+                    ...prev.map((s) => (s.status === 'running' ? { ...s, status: 'completed' as const } : s)),
+                    { name: toolName, status: 'running' as const },
+                  ]);
+                }
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const collectedEvents: AgentEvent[] = [];
-      let assistantContent = '';
-      let modelUsed = currentModel;
+                if (event.type === 'tool_result') {
+                  setActiveSteps((prev) =>
+                    prev.map((s) => (s.status === 'running' ? { ...s, status: 'completed' as const } : s))
+                  );
+                }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+                if (event.type === 'tool_failed') {
+                  setActiveSteps((prev) =>
+                    prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s))
+                  );
+                }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
+                if (event.type === 'permission_required') {
+                  const actionName = event.data?.action || event.data?.tool || 'Action';
+                  setPendingConfirmation({
+                    action: actionName,
+                    tool: event.data?.tool || 'tool',
+                  });
+                }
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const event: AgentEvent = JSON.parse(trimmed.slice(6));
+                if (event.type === 'agent_thinking' && event.data?.status) {
+                  setAgentStepStatus(event.data.status);
+                }
 
-              if (event.type === 'model_selected' && event.data?.model) {
-                modelUsed = event.data.model;
-                setCurrentModel(event.data.model);
+                if (event.type === 'agent_text' && event.data?.text) {
+                  assistantContent = event.data.text;
+                  setLiveStreamText(assistantContent);
+                }
+
+                if (event.type === 'final_response' && event.data?.content) {
+                  assistantContent = event.data.content;
+                  setLiveStreamText(assistantContent);
+                }
+
+                if (event.type === 'agent_error') {
+                  throw new Error(event.data?.error || 'An error occurred during execution.');
+                }
+
+                collectedEvents.push(event);
+              } catch (parseErr: any) {
+                if (parseErr.message && !parseErr.message.includes('JSON')) {
+                  throw parseErr;
+                }
               }
-
-              if (event.type === 'tool_started') {
-                setStatus('executing');
-                onStatusChange?.('executing');
-              }
-
-              if (event.type === 'agent_text' && event.data?.text) {
-                assistantContent = event.data.text;
-              }
-
-              if ((event as any).type === 'final_response' && (event as any).data?.content) {
-                assistantContent = (event as any).data.content;
-              }
-
-              collectedEvents.push(event);
-              setPendingEvents([...collectedEvents]);
-            } catch {
-              // Ignore malformed JSON
             }
           }
         }
-      }
 
-      // Determine honest assistant response
-      let finalContent = assistantContent.trim();
-      if (!finalContent) {
-        const completedTools = collectedEvents.filter((e) => e.type === 'tool_result');
-        if (completedTools.length > 0) {
-          finalContent = 'The requested actions have been executed successfully.';
-        } else {
-          const isGreeting = /^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening|day)|howdy|sup)[\s!.,?]*$/i.test(text.trim());
-          if (isGreeting) {
-            finalContent = selectedModel === 'omniroutes' || modelUsed.includes('Claude') || modelUsed.includes('omniroutes')
-              ? "Hello! I'm Claude Opus 4.6 running via OmniRoutes. How can I assist you today?"
-              : "Hello! I'm Murmur Agent. How can I help you today?";
-          } else {
-            finalContent =
-              'I could not find an available tool to complete this request. Please verify that the required connector (e.g. Google Workspace) is connected under Settings > Connectors.';
-          }
-        }
-      }
+        const finalContent = assistantContent.trim() || 'Task completed successfully.';
 
-      const assistantMsg: ChatMessage = {
-        id: uuid(),
-        role: 'assistant',
-        content: finalContent,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        events: collectedEvents,
-        model: modelUsed,
-      };
+        const assistantMsg: ChatMessage = {
+          id: uuid(),
+          role: 'assistant',
+          content: finalContent,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          mode: activeMode,
+          model: modelUsed,
+          events: collectedEvents,
+        };
 
-      setMessages((prev) => [...prev, assistantMsg]);
-      setPendingEvents([]);
-      setStatus('idle');
-      onStatusChange?.('idle');
-
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError' || (err instanceof DOMException && err.name === 'AbortError')) {
-        // Action was terminated by the user; handleStop already appended termination status
-        return;
-      }
-
-      const errorMsg: ChatMessage = {
-        id: uuid(),
-        role: 'assistant',
-        content: `Error: ${err instanceof Error ? err.message : 'Execution failed'}. Please check your connection and API keys.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-      setStatus('error');
-      onStatusChange?.('error');
-      setPendingEvents([]);
-      setTimeout(() => {
+        setMessages((prev) => [...prev, assistantMsg]);
         setStatus('idle');
         onStatusChange?.('idle');
-      }, 3000);
-    }
-  }, [conversationId, currentModel, onStatusChange, composerRef]);
+        setLiveStreamText('');
+        setAgentStepStatus('');
+      } catch (err: any) {
+        if (controller.signal.aborted) return;
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        setStatus('error');
+        onStatusChange?.('error');
+        setLiveStreamText('');
+        setAgentStepStatus('');
 
-  // Expose global prompt submission for native voice toggle injection
-  useEffect(() => {
-    (window as any).murmurSubmitPrompt = (text: string) => {
-      if (text && typeof text === 'string' && text.trim()) {
-        handleSend(text.trim());
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uuid(),
+            role: 'assistant',
+            content: `I was unable to complete your request: ${errorMsg}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: activeMode,
+            isError: true,
+          },
+        ]);
       }
-    };
-    return () => {
-      delete (window as any).murmurSubmitPrompt;
-    };
-  }, [handleSend]);
+    },
+    [conversationId, currentModel, messages, mode, onStatusChange, selectedModel]
+  );
 
-  // Notify native macOS app when agent status changes
-  useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).webkit?.messageHandlers?.murmurNative) {
-      try {
-        (window as any).webkit.messageHandlers.murmurNative.postMessage({
-          type: 'status',
-          status,
-          model: currentModel,
-        });
-      } catch {}
-    }
-  }, [status, currentModel]);
-
-  // Filter messages by search if specified
   const filteredMessages = searchQuery
     ? messages.filter((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
     : messages;
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      flex: 1,
-      minHeight: 0,
-      backgroundColor: 'var(--mac-card-bg)',
-      border: '1px solid var(--mac-card-border)',
-      borderRadius: '16px',
-      overflow: 'visible',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
-      position: 'relative',
-    }}>
-      {/* Scrollable messages or empty state */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '24px',
+    <div
+      style={{
         display: 'flex',
         flexDirection: 'column',
-      }}>
+        flex: 1,
+        height: '100%',
+        minHeight: 0,
+        backgroundColor: 'var(--murmur-canvas)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* ─── Top Bar: Clean mode switch & status ─── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 28px',
+          borderBottom: '1px solid var(--murmur-border-subtle)',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Subtle Mode Switcher in Header */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: 'var(--murmur-sidebar)',
+              borderRadius: '20px',
+              padding: '2px',
+              gap: '2px',
+              border: '1px solid var(--murmur-border)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleModeChange('chat')}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '16px',
+                border: 'none',
+                backgroundColor: mode === 'chat' ? '#FFFFFF' : 'transparent',
+                color: mode === 'chat' ? 'var(--murmur-plum)' : 'var(--murmur-text-secondary)',
+                fontSize: '12.5px',
+                fontWeight: mode === 'chat' ? 600 : 500,
+                cursor: 'pointer',
+                boxShadow: mode === 'chat' ? '0 1px 2px rgba(40, 8, 19, 0.08)' : 'none',
+                transition: 'all 0.12s ease',
+              }}
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('agent')}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '16px',
+                border: 'none',
+                backgroundColor: mode === 'agent' ? '#FFFFFF' : 'transparent',
+                color: mode === 'agent' ? 'var(--murmur-plum)' : 'var(--murmur-text-secondary)',
+                fontSize: '12.5px',
+                fontWeight: mode === 'agent' ? 600 : 500,
+                cursor: 'pointer',
+                boxShadow: mode === 'agent' ? '0 1px 2px rgba(40, 8, 19, 0.08)' : 'none',
+                transition: 'all 0.12s ease',
+              }}
+            >
+              Agent
+            </button>
+          </div>
+
+          <span
+            style={{
+              fontSize: '12px',
+              color: 'var(--murmur-text-muted)',
+            }}
+          >
+            {mode === 'chat'
+              ? `Ask anything. Have a normal conversation with ${currentModel}.`
+              : 'Ask Murmur to perform tasks across connected services.'}
+          </span>
+        </div>
+
+        {/* Clear / New conversation button */}
+        {messages.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+              }
+              setStatus('idle');
+              onStatusChange?.('idle');
+              setMessages([]);
+              setConversationId(uuid());
+              setLiveStreamText('');
+              setAgentStepStatus('');
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--murmur-text-secondary)',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              transition: 'all 0.12s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--murmur-sidebar)';
+              e.currentTarget.style.color = 'var(--murmur-plum)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--murmur-text-secondary)';
+            }}
+          >
+            Clear conversation
+          </button>
+        )}
+      </div>
+
+      {/* ─── Main Content: Home State OR Conversation Stream ─── */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          minHeight: 0,
+          padding: '24px 28px',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {filteredMessages.length === 0 && !isProcessing ? (
-          /* Empty state matching reference screenshot */
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '260px',
-            margin: 'auto 0',
-            textAlign: 'center',
-            padding: '20px',
-          }}>
-            {/* Waveform / Soundbar muted icon matching screenshot */}
-            <div style={{
+          /* ─── Minimal Home State ─── */
+          <div
+            style={{
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '4px',
-              height: '36px',
-              marginBottom: '16px',
-              opacity: 0.35,
-            }}>
-              <div style={{ width: '3px', height: '14px', backgroundColor: 'var(--mac-plum)', borderRadius: '2px' }} />
-              <div style={{ width: '3px', height: '24px', backgroundColor: 'var(--mac-plum)', borderRadius: '2px' }} />
-              <div style={{ width: '3px', height: '34px', backgroundColor: 'var(--mac-plum)', borderRadius: '2px' }} />
-              <div style={{ width: '3px', height: '18px', backgroundColor: 'var(--mac-plum)', borderRadius: '2px' }} />
-              <div style={{ width: '3px', height: '28px', backgroundColor: 'var(--mac-plum)', borderRadius: '2px' }} />
-              <div style={{ width: '3px', height: '12px', backgroundColor: 'var(--mac-plum)', borderRadius: '2px' }} />
-            </div>
+              margin: 'auto 0',
+              padding: '40px 20px',
+              textAlign: 'center',
+              width: '100%',
+            }}
+          >
+            <div style={{ maxWidth: '640px', width: '100%' }}>
+              <div
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: 'var(--murmur-text-muted)',
+                  marginBottom: '10px',
+                }}
+              >
+                Good afternoon, Arunkumar
+              </div>
 
-            <h3 style={{
-              fontSize: '15px',
-              fontWeight: '700',
-              color: 'var(--mac-plum)',
-              marginBottom: '6px',
-            }}>
-              No recent recordings
-            </h3>
+              <h1
+                style={{
+                  fontSize: '32px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.03em',
+                  color: 'var(--murmur-plum)',
+                  lineHeight: '1.25',
+                  marginBottom: '32px',
+                }}
+              >
+                What can Murmur do for you?
+              </h1>
 
-            <p style={{
-              fontSize: '12px',
-              color: 'var(--mac-text-secondary)',
-              maxWidth: '380px',
-              lineHeight: 1.5,
-              marginBottom: '24px',
-            }}>
-              Transcribed dictations and agent executions are saved temporarily for 4 hours.
-            </p>
+              {/* Centered Hero Composer */}
+              <div style={{ marginBottom: '24px' }}>
+                <Composer
+                  onSend={(msg) => handleSend(msg)}
+                  onStop={handleStop}
+                  isProcessing={isProcessing}
+                  disabled={isProcessing}
+                  mode={mode}
+                  onModeChange={handleModeChange}
+                  activeModelLabel={currentModel}
+                  selectedModelPreference={selectedModel}
+                  onSelectModel={handleSelectModel}
+                  isHero
+                />
+              </div>
 
-            {/* Quick Suggestion Pills */}
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '8px',
-              justifyContent: 'center',
-              maxWidth: '560px',
-            }}>
-              {EXAMPLE_PROMPTS.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={() => handleSend(item.prompt)}
-                  style={{
-                    backgroundColor: 'var(--mac-sidebar-bg)',
-                    border: '1px solid var(--mac-sidebar-border)',
-                    padding: '7px 13px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    color: 'var(--mac-plum)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--mac-sidebar-active)';
-                    e.currentTarget.style.borderColor = 'var(--mac-plum)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--mac-sidebar-bg)';
-                    e.currentTarget.style.borderColor = 'var(--mac-sidebar-border)';
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
+              {/* Understated Suggestion Pills */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'center',
+                }}
+              >
+                {PROMPT_SUGGESTIONS.map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      handleModeChange(item.mode);
+                      handleSend(item.prompt, item.mode);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '16px',
+                      border: '1px solid var(--murmur-border)',
+                      backgroundColor: '#FFFFFF',
+                      color: 'var(--murmur-text-secondary)',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.12s ease',
+                      boxShadow: 'var(--murmur-shadow-subtle)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--murmur-plum)';
+                      e.currentTarget.style.color = 'var(--murmur-plum)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--murmur-border)';
+                      e.currentTarget.style.color = 'var(--murmur-text-secondary)';
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
-          /* Chat message conversation */
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '18px',
-            maxWidth: '820px',
-            margin: '0 auto',
-            width: '100%',
-          }}>
-            {filteredMessages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  width: '100%',
-                }}
-              >
-                {/* Role badge & timestamp */}
-                <div style={{
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: 'var(--mac-text-tertiary)',
-                  marginBottom: '4px',
-                  padding: '0 4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}>
-                  <span>{msg.role === 'user' ? 'Arunkumar' : 'Murmur Agent'}</span>
-                  {msg.model && (
-                    <span style={{
-                      fontSize: '10px',
-                      padding: '1px 5px',
-                      borderRadius: '4px',
-                      backgroundColor: 'rgba(40, 8, 19, 0.06)',
-                      color: 'var(--mac-plum)',
-                    }}>
-                      {msg.model}
-                    </span>
-                  )}
-                  <span>•</span>
-                  <span>{msg.timestamp}</span>
-                </div>
+          /* ─── Active Conversation Stream ─── */
+          <div
+            style={{
+              maxWidth: '740px',
+              width: '100%',
+              margin: '0 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px',
+              paddingBottom: '20px',
+            }}
+          >
+            {filteredMessages.map((msg) => {
+              const isUser = msg.role === 'user';
+              const artifacts = !isUser ? extractWorkArtifacts(msg.content) : [];
 
-                {/* Bubble */}
-                <div style={{
-                  maxWidth: '85%',
-                  padding: '14px 18px',
-                  borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  backgroundColor: msg.role === 'user' ? 'var(--mac-sidebar-bg)' : '#FFFFFF',
-                  border: msg.role === 'user' ? '1px solid var(--mac-sidebar-border)' : '1px solid var(--mac-card-border)',
-                  color: 'var(--mac-text-primary)',
-                  fontSize: '13.5px',
-                  lineHeight: '1.6',
-                  boxShadow: msg.role === 'user' ? 'none' : '0 2px 6px rgba(0,0,0,0.03)',
-                  wordBreak: 'break-word',
-                }}>
-                  {msg.role === 'user' ? (
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                  ) : (
-                    <FormattedMessage content={msg.content} />
-                  )}
-
-                  {/* Work Artifact Card for completed tasks (Docs, Sheets, Notion, Vercel, etc.) */}
-                  {msg.role === 'assistant' && (
-                    <WorkArtifactCards artifacts={extractWorkArtifacts(msg.content, msg.events)} />
-                  )}
-
-                  {/* Tool events summary for assistant message */}
-                  {msg.events && msg.events.length > 0 && (
-                    <div style={{
-                      marginTop: '12px',
-                      paddingTop: '10px',
-                      borderTop: '1px solid var(--mac-card-border)',
+              return (
+                <div
+                  key={msg.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: isUser ? 'flex-end' : 'flex-start',
+                    width: '100%',
+                  }}
+                >
+                  {/* Sender Header */}
+                  <div
+                    style={{
                       display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                    }}>
-                      {msg.events
-                        .filter((e) => ['tool_result', 'tool_failed'].includes(e.type))
-                        .map((evt, idx) => {
-                          const detectedUrl = evt.data.url || (evt.data.result?.match(/https?:\/\/[^\s"'<>\)]+/)?.[0]);
-                          return (
-                            <div
-                              key={idx}
-                              style={{
-                                fontSize: '11px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                flexWrap: 'wrap',
-                                gap: '6px',
-                                color: evt.type === 'tool_result' ? '#1b7440' : '#c0394b',
-                                fontWeight: '500',
-                              }}
-                            >
-                              <span>{evt.type === 'tool_result' ? '✓' : '✗'}</span>
-                              <span style={{ fontFamily: 'monospace' }}>{evt.data.tool}</span>
-                              {evt.data.result && !detectedUrl && (
-                                <span style={{ color: 'var(--mac-text-tertiary)' }}>({evt.data.result})</span>
-                              )}
-                              {evt.data.error && (
-                                <span style={{ color: '#c0394b' }}>({evt.data.error})</span>
-                              )}
-                              {detectedUrl && (
-                                <ToolResultLinkBadge url={detectedUrl} label={evt.data.title} />
-                              )}
-                            </div>
-                          );
-                        })}
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '6px',
+                      fontSize: '11.5px',
+                      color: 'var(--murmur-text-muted)',
+                      padding: '0 4px',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: isUser ? 'var(--murmur-text-primary)' : 'var(--murmur-plum)' }}>
+                      {isUser ? 'You' : 'Murmur'}
+                    </span>
+                    {!isUser && msg.model && (
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          padding: '1px 6px',
+                          borderRadius: '10px',
+                          backgroundColor: 'rgba(45, 13, 25, 0.05)',
+                          color: 'var(--murmur-plum)',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {msg.model}
+                      </span>
+                    )}
+                    <span>{msg.timestamp}</span>
+                  </div>
+
+                  {/* Message Body */}
+                  {isUser ? (
+                    <div
+                      style={{
+                        backgroundColor: 'var(--murmur-user-msg)',
+                        color: 'var(--murmur-text-primary)',
+                        padding: '10px 16px',
+                        borderRadius: '16px 16px 4px 16px',
+                        fontSize: '14.5px',
+                        lineHeight: '1.5',
+                        maxWidth: '85%',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        color: 'var(--murmur-text-primary)',
+                        fontSize: '15px',
+                        lineHeight: '1.65',
+                      }}
+                    >
+                      {msg.isError ? (
+                        <div
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            backgroundColor: '#FEF2F2',
+                            border: '1px solid #FCA5A5',
+                            color: '#991B1B',
+                            fontSize: '13.5px',
+                          }}
+                        >
+                          {msg.content}
+                        </div>
+                      ) : (
+                        <div className="prose-editorial">
+                          <FormattedMessage content={msg.content} />
+                          {artifacts.length > 0 && <WorkArtifactCards artifacts={artifacts} />}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
-            {/* Live activity feed during execution */}
+            {/* Live Streaming Response & Progress */}
             {isProcessing && (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                padding: '14px 18px',
-                borderRadius: '14px',
-                backgroundColor: 'rgba(245, 235, 225, 0.5)',
-                border: '1px solid var(--mac-sidebar-border)',
-                maxWidth: '85%',
-              }}>
-                <div style={{
+              <div
+                style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: 'var(--mac-plum)',
-                }}>
-                  <div style={{
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--mac-tag-pink)',
-                    animation: 'pulseGently 1.2s infinite',
-                  }} />
-                  <span>Murmur Agent is working...</span>
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  width: '100%',
+                  marginTop: '8px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '8px',
+                    fontSize: '12px',
+                    color: 'var(--murmur-text-muted)',
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: 'var(--murmur-plum)' }}>Murmur</span>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      color: 'var(--murmur-plum)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span
+                      className="animate-pulse-subtle"
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--murmur-plum)',
+                      }}
+                    />
+                    {agentStepStatus || 'Thinking...'}
+                  </span>
                 </div>
 
-                {pendingEvents
-                  .filter((e) => ['model_selected', 'tool_started', 'tool_result'].includes(e.type))
-                  .map((evt, i) => {
-                    const detectedUrl = evt.data.url || (evt.data.result?.match(/https?:\/\/[^\s"'<>\)]+/)?.[0]);
-                    return (
-                      <div
-                        key={i}
-                        style={{
-                          fontSize: '11px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          flexWrap: 'wrap',
-                          gap: '6px',
-                          color: 'var(--mac-text-secondary)',
-                        }}
-                      >
-                        <span style={{ opacity: 0.6 }}>→</span>
-                        {evt.type === 'model_selected' && <span>Using {evt.data.model}</span>}
-                        {evt.type === 'tool_started' && <span>Running <code style={{ color: 'var(--mac-plum)' }}>{evt.data.tool}</code>...</span>}
-                        {evt.type === 'tool_result' && (
-                          <span style={{ color: '#1b7440', display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            <span>✓ {evt.data.tool}: {evt.data.title || evt.data.result}</span>
-                            {detectedUrl && <ToolResultLinkBadge url={detectedUrl} />}
+                {liveStreamText ? (
+                  <div className="prose-editorial" style={{ width: '100%' }}>
+                    <FormattedMessage content={liveStreamText} />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize: '14px',
+                      color: 'var(--murmur-text-secondary)',
+                      fontStyle: 'italic',
+                      padding: '4px 0',
+                    }}
+                  >
+                    {mode === 'chat' ? `Generating response with ${currentModel}...` : 'Executing task steps...'}
+                  </div>
+                )}
+
+                {/* Multi-step Concise Progress Indicator (Requirement 14) */}
+                {activeSteps.length > 0 && isProcessing && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '5px',
+                      marginTop: '12px',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      backgroundColor: 'var(--murmur-sidebar)',
+                      border: '1px solid var(--murmur-border-subtle)',
+                      width: 'fit-content',
+                      minWidth: '220px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        color: 'var(--murmur-text-muted)',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      Task Progress
+                    </div>
+                    {activeSteps.map((step, idx) => {
+                      const isDone = step.status === 'completed';
+                      const isRunning = step.status === 'running';
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '12.5px',
+                            color: isRunning
+                              ? 'var(--murmur-plum)'
+                              : isDone
+                              ? 'var(--murmur-text-primary)'
+                              : 'var(--murmur-text-muted)',
+                            fontWeight: isRunning ? 600 : 450,
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '14px',
+                              color: isDone ? '#10B981' : isRunning ? 'var(--murmur-plum)' : '#EF4444',
+                            }}
+                          >
+                            {isDone ? '✓' : isRunning ? '→' : '✕'}
                           </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                          <span>{step.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Interactive Confirmation Card (Requirement 4 & 12) */}
+            {pendingConfirmation && !isProcessing && (
+              <div
+                style={{
+                  margin: '12px 0 6px',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--murmur-border-solid)',
+                  backgroundColor: '#FFFFFF',
+                  boxShadow: 'var(--murmur-shadow-card)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  maxWidth: '520px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                      color: '#D97706',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    !
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                      Confirmation Required
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--murmur-text-muted)' }}>
+                      This action sends or modifies external data. Please confirm to proceed.
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--murmur-text-primary)',
+                    backgroundColor: 'var(--murmur-sidebar)',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                  }}
+                >
+                  Ready to perform: <strong>{pendingConfirmation.action}</strong>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const action = pendingConfirmation.action;
+                      setPendingConfirmation(null);
+                      handleSend(`Yes, confirmed. Go ahead and execute: ${action}`);
+                    }}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--murmur-plum)',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'opacity 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                  >
+                    Approve & Execute
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingConfirmation(null);
+                      handleSend('Cancel this action.');
+                    }}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      backgroundColor: 'transparent',
+                      color: 'var(--murmur-text-secondary)',
+                      border: '1px solid var(--murmur-border)',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
 
@@ -603,129 +890,31 @@ export function AgentConsole({
         )}
       </div>
 
-      {/* Composer Input Area matching reference screenshot */}
-      <div style={{
-        padding: '12px 20px 16px',
-        backgroundColor: '#FFFFFF',
-        borderTop: '1px solid var(--mac-card-border)',
-        borderBottomLeftRadius: '16px',
-        borderBottomRightRadius: '16px',
-        position: 'relative',
-        overflow: 'visible',
-      }}>
-        <Composer
-          onSend={(msg) => handleSend(msg)}
-          onStop={handleStop}
-          isProcessing={isProcessing}
-          disabled={isProcessing}
-          activeModelLabel={currentModel}
-          selectedModelPreference={selectedModel}
-          onSelectModel={handleSelectModel}
-          placeholder="Type a message..."
-        />
-
-        {/* Footer shortcuts hint */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginTop: '8px',
-          padding: '0 4px',
-          fontSize: '11px',
-          color: 'var(--mac-text-muted)',
-        }}>
-          <div>
-            Press <kbd style={{ padding: '1px 5px', borderRadius: '4px', background: '#F3F4F6', border: '1px solid #E5E7EB', fontWeight: '600' }}>⏎ Return</kbd> to send, <kbd style={{ padding: '1px 5px', borderRadius: '4px', background: '#F3F4F6', border: '1px solid #E5E7EB', fontWeight: '600' }}>⇧ Shift + ⏎</kbd> for new line
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>
-              {selectedModel === 'local'
-                ? 'Active Provider:'
-                : selectedModel === 'anthropic'
-                ? 'Active Model:'
-                : selectedModel === 'kimi'
-                ? 'Active Model:'
-                : selectedModel === 'omniroutes'
-                ? 'Active Model:'
-                : 'Auto Router:'}
-            </span>
-            <span style={{ color: '#0F172A', fontWeight: '600' }}>
-              {selectedModel === 'local'
-                ? 'Local — Qwen 3.5'
-                : selectedModel === 'anthropic'
-                ? 'Claude Opus 4.6'
-                : selectedModel === 'kimi'
-                ? 'Kimi K2.6'
-                : selectedModel === 'omniroutes'
-                ? 'Claude Opus 4.6 (OmniRoutes)'
-                : currentModel}
-            </span>
-            {selectedModel === 'anthropic' && (
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                color: '#D97706',
-                backgroundColor: '#FEF3C7',
-                border: '1px solid #FDE68A',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}>
-                <span>★</span> Anthropic
-              </span>
-            )}
-            {selectedModel === 'omniroutes' && (
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                color: '#D97706',
-                backgroundColor: '#FEF3C7',
-                border: '1px solid #FDE68A',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}>
-                <span>★</span> OmniRoutes
-              </span>
-            )}
-            {selectedModel === 'local' && (
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                color: '#059669',
-                backgroundColor: '#ECFDF5',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}>
-                <span>●</span> 100% Local (Mac)
-              </span>
-            )}
-            {selectedModel === 'kimi' && (
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                color: '#7E22CE',
-                backgroundColor: '#FAF5FF',
-                border: '1px solid #E9D5FF',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}>
-                <span>★</span> moonshotai/kimi-k2.6:free
-              </span>
-            )}
+      {/* ─── Bottom Composer (visible when in conversation) ─── */}
+      {filteredMessages.length > 0 && (
+        <div
+          style={{
+            padding: '14px 28px 20px',
+            backgroundColor: 'var(--murmur-canvas)',
+            borderTop: '1px solid var(--murmur-border-subtle)',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ maxWidth: '740px', margin: '0 auto', width: '100%' }}>
+            <Composer
+              onSend={(msg) => handleSend(msg)}
+              onStop={handleStop}
+              isProcessing={isProcessing}
+              disabled={isProcessing}
+              mode={mode}
+              onModeChange={handleModeChange}
+              activeModelLabel={currentModel}
+              selectedModelPreference={selectedModel}
+              onSelectModel={handleSelectModel}
+            />
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

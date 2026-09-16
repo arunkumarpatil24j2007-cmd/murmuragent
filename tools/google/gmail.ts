@@ -121,25 +121,53 @@ const gmailDraft: ToolDefinition = {
 
 const gmailSend: ToolDefinition = {
   name: 'gmail.send',
-  description: 'Send an email through your connected Gmail account. Requires user confirmation.',
+  description: 'Send an email through your connected Gmail account. Requires explicit user confirmation.',
   parameters: [
     { name: 'to', type: 'string', description: 'Recipient email address', required: true },
     { name: 'subject', type: 'string', description: 'Email subject', required: true },
     { name: 'body', type: 'string', description: 'Email body text', required: true },
   ],
-  permission: PermissionLevel.DANGEROUS,
+  permission: PermissionLevel.EXTERNAL_ACTION,
+  requiresConfirmation: true,
+  riskLevel: 'high',
   source: 'api',
 };
 
 const gmailReply: ToolDefinition = {
   name: 'gmail.reply',
-  description: 'Reply to an existing email message within its thread. Requires user confirmation.',
+  description: 'Reply to an existing email message within its thread. Requires explicit user confirmation.',
   parameters: [
     { name: 'emailId', type: 'string', description: 'ID of the message to reply to', required: true },
     { name: 'body', type: 'string', description: 'Reply content', required: true },
   ],
-  permission: PermissionLevel.DANGEROUS,
+  permission: PermissionLevel.EXTERNAL_ACTION,
+  requiresConfirmation: true,
+  riskLevel: 'high',
   source: 'api',
+};
+
+const gmailListUnanswered: ToolDefinition = {
+  name: 'gmail.listUnanswered',
+  description: 'Find unanswered emails received in the last N days that need a follow-up or response.',
+  parameters: [
+    { name: 'days', type: 'number', description: 'Lookback window in days (default: 7)', required: false },
+    { name: 'maxResults', type: 'number', description: 'Maximum emails to return (default: 10)', required: false },
+  ],
+  permission: PermissionLevel.READ,
+  source: 'api',
+  riskLevel: 'low',
+};
+
+const gmailExtractLeads: ToolDefinition = {
+  name: 'gmail.extractLeads',
+  description: 'Extract prospect/client leads from Gmail conversations with their names, companies, email addresses, and latest status.',
+  parameters: [
+    { name: 'query', type: 'string', description: 'Filter query (e.g. "leads", "proposal", "interested", default: "inbox")', required: false },
+    { name: 'maxResults', type: 'number', description: 'Max leads to inspect (default: 15)', required: false },
+  ],
+  permission: PermissionLevel.READ,
+  source: 'api',
+  riskLevel: 'low',
 };
 
 // MARK: - Registrations
@@ -439,6 +467,156 @@ export function registerGmailTools(): void {
     } catch (err: any) {
       logger.error('GmailTool', 'Reply failed', { error: String(err) });
       return { success: false, error: `Gmail reply error: ${err?.message || String(err)}` };
+    }
+  });
+
+  // 7. List Unanswered Emails
+  toolRegistry.register(gmailListUnanswered, async (args) => {
+    try {
+      const auth = await getAuthenticatedGoogleClient();
+      if (!auth) {
+        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      }
+
+      const days = Math.min(Math.max(1, Number(args.days) || 7), 30);
+      const maxResults = Math.min(Math.max(1, Number(args.maxResults) || 10), 25);
+      const gmail = google.gmail({ version: 'v1', auth });
+
+      const q = `label:inbox -from:me newer_than:${days}d`;
+      const listRes = await gmail.users.messages.list({
+        userId: 'me',
+        q,
+        maxResults,
+      });
+
+      const messageItems = listRes.data.messages || [];
+      if (messageItems.length === 0) {
+        return {
+          success: true,
+          result: { count: 0, days, unansweredEmails: [], message: `No unanswered emails found in the last ${days} days.` },
+        };
+      }
+
+      const emails = await Promise.all(
+        messageItems.map(async (item) => {
+          try {
+            const meta = await gmail.users.messages.get({
+              userId: 'me',
+              id: item.id!,
+              format: 'metadata',
+              metadataHeaders: ['Subject', 'From', 'Date'],
+            });
+            const headers = meta.data.payload?.headers;
+            return {
+              id: item.id,
+              threadId: item.threadId,
+              subject: getHeader(headers, 'Subject') || '(No Subject)',
+              from: getHeader(headers, 'From'),
+              date: getHeader(headers, 'Date'),
+              snippet: meta.data.snippet || '',
+              url: `https://mail.google.com/mail/u/0/#inbox/${item.id}`,
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const valid = emails.filter(Boolean);
+      return {
+        success: true,
+        result: {
+          count: valid.length,
+          days,
+          unansweredEmails: valid,
+        },
+      };
+    } catch (err: any) {
+      logger.error('GmailTool', 'ListUnanswered failed', { error: String(err) });
+      return { success: false, error: `Gmail error: ${err?.message || String(err)}` };
+    }
+  });
+
+  // 8. Extract Leads from Emails
+  toolRegistry.register(gmailExtractLeads, async (args) => {
+    try {
+      const auth = await getAuthenticatedGoogleClient();
+      if (!auth) {
+        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      }
+
+      const rawQuery = (args.query as string) || 'inbox';
+      const maxResults = Math.min(Math.max(1, Number(args.maxResults) || 15), 30);
+      const gmail = google.gmail({ version: 'v1', auth });
+
+      const listRes = await gmail.users.messages.list({
+        userId: 'me',
+        q: rawQuery,
+        maxResults,
+      });
+
+      const messageItems = listRes.data.messages || [];
+      const leads: Array<{
+        name: string;
+        email: string;
+        company: string;
+        subject: string;
+        date: string;
+        status: string;
+        snippet: string;
+      }> = [];
+
+      for (const item of messageItems) {
+        try {
+          const meta = await gmail.users.messages.get({
+            userId: 'me',
+            id: item.id!,
+            format: 'metadata',
+            metadataHeaders: ['Subject', 'From', 'Date'],
+          });
+          const headers = meta.data.payload?.headers;
+          const fromRaw = getHeader(headers, 'From') || '';
+          const subject = getHeader(headers, 'Subject') || '';
+          const date = getHeader(headers, 'Date') || '';
+
+          // Parse name and email from "Name <email@domain.com>"
+          const emailMatch = fromRaw.match(/<([^>]+)>/);
+          const email = emailMatch ? emailMatch[1] : fromRaw;
+          const name = fromRaw.replace(/<[^>]+>/, '').replace(/["']/g, '').trim() || email.split('@')[0];
+
+          // Infer company from domain
+          let company = '';
+          if (email.includes('@')) {
+            const domain = email.split('@')[1];
+            if (!['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'].includes(domain.toLowerCase())) {
+              const baseDomain = domain.split('.')[0];
+              company = baseDomain.charAt(0).toUpperCase() + baseDomain.slice(1);
+            }
+          }
+
+          leads.push({
+            name,
+            email,
+            company: company || 'Independent',
+            subject,
+            date,
+            status: 'Prospect',
+            snippet: meta.data.snippet || '',
+          });
+        } catch {}
+      }
+
+      return {
+        success: true,
+        result: {
+          count: leads.length,
+          query: rawQuery,
+          leads,
+        },
+      };
+    } catch (err: any) {
+      logger.error('GmailTool', 'ExtractLeads failed', { error: String(err) });
+      return { success: false, error: `Gmail error: ${err?.message || String(err)}` };
     }
   });
 }

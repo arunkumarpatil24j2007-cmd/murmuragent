@@ -77,6 +77,20 @@ const sheetsAppend: ToolDefinition = {
   source: 'api',
 };
 
+const sheetsAppendLeads: ToolDefinition = {
+  name: 'sheets.appendLeads',
+  description:
+    'Append structured lead or prospect records (Name, Company, Email, Status, Notes) into a Google Sheet. Automatically creates a formatted "Leads & Prospects" spreadsheet if spreadsheetId is omitted.',
+  parameters: [
+    { name: 'spreadsheetId', type: 'string', description: 'Optional existing Google Spreadsheet ID. If omitted, creates a new one.', required: false },
+    { name: 'title', type: 'string', description: 'Title if creating a new sheet (e.g. "Hyderabad Interior Designers", "Q3 Leads")', required: false },
+    { name: 'leads', type: 'array', description: 'Array of lead objects, or JSON string of leads with name, company, email, status, and notes', required: true },
+  ],
+  permission: PermissionLevel.WRITE,
+  source: 'api',
+  riskLevel: 'low',
+};
+
 // MARK: - Registrations
 
 export function registerSheetsTools(): void {
@@ -260,6 +274,106 @@ export function registerSheetsTools(): void {
     } catch (err: any) {
       logger.error('SheetsTool', 'Append sheet failed', { error: String(err) });
       return { success: false, error: `Sheets append error: ${err?.message || String(err)}` };
+    }
+  });
+
+  // 5. Append Leads
+  toolRegistry.register(sheetsAppendLeads, async (args) => {
+    try {
+      const auth = await getAuthenticatedGoogleClient();
+      if (!auth) {
+        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      }
+
+      const sheets = google.sheets({ version: 'v4', auth });
+      let spreadsheetId = args.spreadsheetId as string | undefined;
+
+      // Parse leads
+      let rawLeads = args.leads;
+      if (typeof rawLeads === 'string') {
+        try {
+          rawLeads = JSON.parse(rawLeads);
+        } catch {
+          rawLeads = [];
+        }
+      }
+      const leadsList: any[] = Array.isArray(rawLeads) ? rawLeads : [];
+
+      // If no spreadsheet ID provided, create a new one with standard lead headers
+      if (!spreadsheetId) {
+        const title = (args.title as string) || 'Murmur Leads & Prospects';
+        const createRes = await sheets.spreadsheets.create({
+          requestBody: {
+            properties: { title },
+            sheets: [
+              {
+                properties: {
+                  title: 'Leads',
+                  gridProperties: { frozenRowCount: 1 },
+                },
+                data: [
+                  {
+                    startRow: 0,
+                    startColumn: 0,
+                    rowData: [
+                      {
+                        values: [
+                          { userEnteredValue: { stringValue: 'Name' } },
+                          { userEnteredValue: { stringValue: 'Company' } },
+                          { userEnteredValue: { stringValue: 'Email' } },
+                          { userEnteredValue: { stringValue: 'Status' } },
+                          { userEnteredValue: { stringValue: 'Date Added' } },
+                          { userEnteredValue: { stringValue: 'Notes / Snippet' } },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        });
+        spreadsheetId = createRes.data.spreadsheetId || undefined;
+      }
+
+      if (!spreadsheetId) {
+        throw new Error('Failed to create or target Google Spreadsheet for leads');
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // Convert lead items into 2D rows
+      const rows = leadsList.map((lead: any) => [
+        lead.name || lead.contact || '',
+        lead.company || lead.business || '',
+        lead.email || '',
+        lead.status || 'New Lead',
+        lead.date || todayStr,
+        lead.notes || lead.snippet || lead.description || '',
+      ]);
+
+      if (rows.length > 0) {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: 'Leads!A:F',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: rows },
+        });
+      }
+
+      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+      return {
+        success: true,
+        result: {
+          spreadsheetId,
+          totalLeadsAdded: rows.length,
+          url,
+          sampleLeads: rows.slice(0, 3).map((r) => ({ name: r[0], company: r[1], email: r[2] })),
+        },
+      };
+    } catch (err: any) {
+      logger.error('SheetsTool', 'AppendLeads failed', { error: String(err) });
+      return { success: false, error: `Sheets appendLeads error: ${err?.message || String(err)}` };
     }
   });
 }
