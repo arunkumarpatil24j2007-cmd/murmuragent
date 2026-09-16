@@ -166,7 +166,7 @@ export class AnthropicProvider implements ModelProvider {
   }
 
   get baseUrl(): string {
-    return this.customConfig?.baseUrl || env.anthropic.baseUrl || process.env.ANTHROPIC_BASE_URL || 'http://localhost:20128/v1';
+    return this.customConfig?.baseUrl || env.anthropic.baseUrl || process.env.ANTHROPIC_BASE_URL || 'http://127.0.0.1:20128/v1';
   }
 
   get apiKey(): string | undefined {
@@ -392,9 +392,15 @@ export class AnthropicProvider implements ModelProvider {
         }
 
         if (attempt >= maxAttempts) {
-          updateAnthropicDiagnostic({ status: 'failed', error: lastError.message });
-          throw new Error(`Claude Opus 4.6 request failed: ${lastError.message}. No fallback model was used.`);
+          const detailedMsg = (err as any)?.cause?.message || (err as any)?.cause?.code
+            ? `${lastError.message} (${(err as any).cause.code || (err as any).cause.message})`
+            : lastError.message;
+          updateAnthropicDiagnostic({ status: 'failed', error: detailedMsg });
+          throw new Error(`Claude Opus 4.6 request failed: ${detailedMsg}. No fallback model was used.`);
         }
+
+        // Brief delay before retrying transient network errors
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
 

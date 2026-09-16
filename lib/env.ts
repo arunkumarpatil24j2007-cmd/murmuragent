@@ -55,12 +55,12 @@ export const env = {
   omniroutes: {
     apiKey: process.env.OMNIROUTES_API_KEY || '',
     model: process.env.OMNIROUTES_MODEL || 'aug/claude-opus-4.6',
-    baseUrl: process.env.OMNIROUTES_BASE_URL || 'http://localhost:20128/v1',
+    baseUrl: process.env.OMNIROUTES_BASE_URL || 'http://127.0.0.1:20128/v1',
   },
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || process.env.OMNIROUTES_API_KEY || '',
     model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
-    baseUrl: process.env.ANTHROPIC_BASE_URL || process.env.OMNIROUTES_BASE_URL || 'http://localhost:20128/v1',
+    baseUrl: process.env.ANTHROPIC_BASE_URL || process.env.OMNIROUTES_BASE_URL || 'http://127.0.0.1:20128/v1',
   },
 
   // Browser
