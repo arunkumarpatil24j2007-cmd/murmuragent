@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import type { AgentEvent } from '@/lib/schemas';
 import { Composer } from '@/components/composer';
 import { FormattedMessage, WorkArtifactCards, extractWorkArtifacts } from '@/components/work-artifact';
+import { Mascot3D } from '@/components/mascot-3d';
 
 export interface ChatMessage {
   id: string;
@@ -463,29 +464,8 @@ export function AgentConsole({
             }}
           >
             <div style={{ maxWidth: '680px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Mascot Hero Character with Hand-Drawn Annotation */}
-              <div
-                style={{
-                  position: 'relative',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <img
-                  src="/mascot-hero.png"
-                  alt="Murmur Character — Same brain. Less friction."
-                  style={{
-                    width: '280px',
-                    height: 'auto',
-                    objectFit: 'contain',
-                    userSelect: 'none',
-                    pointerEvents: 'none',
-                    filter: 'drop-shadow(0 14px 28px rgba(245, 210, 225, 0.4))',
-                  }}
-                />
-              </div>
+              {/* Interactive 3D Mascot Character with Physics & Hand-Drawn Annotation */}
+              <Mascot3D />
 
               {/* Uppercase Tracked Greeting */}
               <div
