@@ -18,8 +18,35 @@ export interface MurmurUser {
   status: 'active' | 'recent' | 'offline';
 }
 
-export async function GET(_req: NextRequest) {
+import { getAuthenticatedUser } from '@/lib/auth-session';
+import { ADMIN_EMAIL, ADMIN_PASSWORD } from '@/app/api/admin/verify/route';
+
+export async function GET(req: NextRequest) {
   try {
+    // Check admin authorization
+    const adminCookie = req.cookies.get('murmur_admin_session')?.value;
+    const adminPasswordHeader = req.headers.get('x-admin-password');
+    const isPasswordAuthorized =
+      adminCookie === 'authenticated' || adminPasswordHeader === ADMIN_PASSWORD;
+
+    const user = await getAuthenticatedUser(req);
+
+    // Only allow if password is authorized AND user (if logged in) is the admin email
+    const isEmailAuthorized =
+      !user || user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+    if (!isPasswordAuthorized || !isEmailAuthorized) {
+      return NextResponse.json(
+        {
+          error: `Admin authorization required. Access restricted to ${ADMIN_EMAIL} with admin password.`,
+          total: 0,
+          users: [],
+          requiresPassword: true,
+        },
+        { status: 403 }
+      );
+    }
+
     const usersMap = new Map<string, MurmurUser>();
 
     // 1. Fetch Google OAuth Accounts from Supabase

@@ -6,23 +6,39 @@ import type { MurmurUser } from '@/app/api/users/route';
 interface UsersViewProps {
   onOpenLoginModal?: () => void;
   currentUserEmail?: string;
+  isAdminUnlocked?: boolean;
+  onUnlockRequest?: () => void;
 }
 
-export function UsersView({ onOpenLoginModal, currentUserEmail }: UsersViewProps) {
+export function UsersView({
+  onOpenLoginModal,
+  currentUserEmail,
+  isAdminUnlocked = false,
+  onUnlockRequest,
+}: UsersViewProps) {
   const [users, setUsers] = useState<MurmurUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'google' | 'primary'>('all');
   const [selectedUser, setSelectedUser] = useState<MurmurUser | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLockedByApi, setIsLockedByApi] = useState(false);
 
   const fetchUsers = async () => {
+    if (!isAdminUnlocked) {
+      setIsLoading(false);
+      return;
+    }
     setIsRefreshing(true);
     try {
       const res = await fetch('/api/users');
       const data = await res.json();
-      if (data.success && Array.isArray(data.users)) {
+      if (data.requiresPassword) {
+        setIsLockedByApi(true);
+        setUsers([]);
+      } else if (data.success && Array.isArray(data.users)) {
         setUsers(data.users);
+        setIsLockedByApi(false);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -34,7 +50,117 @@ export function UsersView({ onOpenLoginModal, currentUserEmail }: UsersViewProps
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [isAdminUnlocked]);
+
+  const isActuallyLocked = !isAdminUnlocked || isLockedByApi;
+
+  if (isActuallyLocked) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flex: 1,
+          height: '100%',
+          backgroundColor: 'var(--murmur-canvas)',
+          padding: '40px 24px',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '440px',
+            width: '100%',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '20px',
+            border: '1px solid var(--murmur-border-solid)',
+            boxShadow: '0 10px 30px -5px rgba(45, 13, 25, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
+            padding: '36px 32px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              backgroundColor: 'rgba(45, 13, 25, 0.06)',
+              border: '1px solid rgba(45, 13, 25, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--murmur-plum)',
+              marginBottom: '18px',
+            }}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+
+          <h2
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--murmur-text-primary)',
+              letterSpacing: '-0.02em',
+              marginBottom: '8px',
+            }}
+          >
+            Users Directory is Locked
+          </h2>
+
+          <p
+            style={{
+              fontSize: '13px',
+              color: 'var(--murmur-text-secondary)',
+              lineHeight: 1.5,
+              marginBottom: '22px',
+            }}
+          >
+            This directory contains registered accounts, authentication profiles, and login activity. Access is restricted to administrator (<strong style={{ color: 'var(--murmur-plum)' }}>arunkumarpatil24j2007@gmail.com</strong>).
+          </p>
+
+          <button
+            type="button"
+            onClick={onUnlockRequest}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              backgroundColor: 'var(--murmur-plum)',
+              color: '#FFFFFF',
+              fontSize: '13px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(45, 13, 25, 0.25)',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'none';
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span>Enter Admin Password</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {

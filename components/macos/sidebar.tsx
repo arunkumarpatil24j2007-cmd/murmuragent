@@ -26,6 +26,7 @@ interface SidebarProps {
   currentUser?: { name?: string; email?: string; picture?: string | null } | null;
   onOpenLogin?: () => void;
   isProcessing?: boolean;
+  isAdminUnlocked?: boolean;
 }
 
 export function Sidebar({
@@ -47,6 +48,7 @@ export function Sidebar({
   currentUser = null,
   onOpenLogin,
   isProcessing = false,
+  isAdminUnlocked = false,
 }: SidebarProps) {
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
 
@@ -292,20 +294,39 @@ export function Sidebar({
                   <span style={{ opacity: isActive ? 1 : 0.75 }}>{item.icon}</span>
                   <span>{item.label}</span>
                 </div>
-                {item.badge !== undefined && (
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      padding: '1px 6px',
-                      borderRadius: '10px',
-                      backgroundColor: isActive ? 'rgba(45, 13, 25, 0.1)' : 'rgba(107, 94, 85, 0.12)',
-                      color: isActive ? 'var(--murmur-plum)' : 'var(--murmur-text-secondary)',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {item.badge}
-                  </span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {(item.tab === 'tools' || item.tab === 'users') && !isAdminUnlocked && (
+                    <span
+                      title="Admin password protected"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: 0.65,
+                        color: isActive ? 'var(--murmur-plum)' : 'var(--murmur-text-tertiary)',
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </span>
+                  )}
+                  {item.badge !== undefined && (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        backgroundColor: isActive ? 'rgba(45, 13, 25, 0.1)' : 'rgba(107, 94, 85, 0.12)',
+                        color: isActive ? 'var(--murmur-plum)' : 'var(--murmur-text-secondary)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}
