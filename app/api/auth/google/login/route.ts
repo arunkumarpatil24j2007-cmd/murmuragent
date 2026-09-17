@@ -27,9 +27,25 @@ export async function GET(req: NextRequest) {
     const currentUser = await getAuthenticatedUser(req);
     const userId = currentUser?.id || searchParams.get('userId') || undefined;
 
+    // Dynamically detect request origin (e.g. https://murmuragent.vercel.app or http://localhost:3000)
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
+    const proto = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
+    const detectedOrigin = `${proto}://${host}`;
+
+    let effectiveRedirectUri = customRedirect;
+    if (!effectiveRedirectUri) {
+      if (!host.includes('localhost')) {
+        // Production: always use the deployed origin callback unless explicitly overridden
+        effectiveRedirectUri = `${detectedOrigin}/api/auth/google/callback`;
+      } else {
+        // Localhost: use configured redirectUri or localhost origin
+        effectiveRedirectUri = env.google.redirectUri || `${detectedOrigin}/api/auth/google/callback`;
+      }
+    }
+
     // Generate signed, expiring CSRF state containing optional userId
     const { stateParam, cookieValue } = generateOAuthState(userId);
-    const authUrl = generateGoogleAuthUrl(stateParam, customRedirect);
+    const authUrl = generateGoogleAuthUrl(stateParam, effectiveRedirectUri);
 
     // If caller explicitly requested JSON format
     if (format === 'json' || req.headers.get('accept')?.includes('application/json')) {
@@ -40,6 +56,13 @@ export async function GET(req: NextRequest) {
         sameSite: 'lax',
         path: '/',
         maxAge: 600, // 10 minutes
+      });
+      response.cookies.set('murmur_google_redirect_uri', effectiveRedirectUri, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 600,
       });
       response.cookies.set('murmur_auth_return_to', returnTo, {
         httpOnly: true,
@@ -58,6 +81,13 @@ export async function GET(req: NextRequest) {
       sameSite: 'lax',
       path: '/',
       maxAge: 600, // 10 minutes
+    });
+    response.cookies.set('murmur_google_redirect_uri', effectiveRedirectUri, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 600,
     });
     response.cookies.set('murmur_auth_return_to', returnTo, {
       httpOnly: true,

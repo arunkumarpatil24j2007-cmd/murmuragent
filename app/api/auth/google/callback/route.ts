@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     const res = NextResponse.redirect(redirectUrl);
     res.cookies.delete('murmur_google_oauth_state');
     res.cookies.delete('murmur_auth_return_to');
+    res.cookies.delete('murmur_google_redirect_uri');
     return res;
   }
 
@@ -47,6 +48,7 @@ export async function GET(req: NextRequest) {
     const res = NextResponse.redirect(redirectUrl);
     res.cookies.delete('murmur_google_oauth_state');
     res.cookies.delete('murmur_auth_return_to');
+    res.cookies.delete('murmur_google_redirect_uri');
     return res;
   }
 
@@ -59,6 +61,7 @@ export async function GET(req: NextRequest) {
     const res = NextResponse.redirect(redirectUrl);
     res.cookies.delete('murmur_google_oauth_state');
     res.cookies.delete('murmur_auth_return_to');
+    res.cookies.delete('murmur_google_redirect_uri');
     return res;
   }
 
@@ -72,9 +75,17 @@ export async function GET(req: NextRequest) {
     } catch {}
   }
 
+  // Determine effective callback URI matching the login initialization
+  const redirectUriCookie = req.cookies.get('murmur_google_redirect_uri')?.value;
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
+  const proto = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
+  const detectedOrigin = `${proto}://${host}`;
+  const effectiveCallbackUri =
+    redirectUriCookie || (!host.includes('localhost') ? `${detectedOrigin}/api/auth/google/callback` : undefined);
+
   // 4. Exchange code for access & refresh tokens
   try {
-    const tokens = await exchangeGoogleCode(code, undefined, stateUserId);
+    const tokens = await exchangeGoogleCode(code, effectiveCallbackUri, stateUserId);
     logger.info('GoogleAuth', 'Successfully connected Google Account', { email: tokens.user?.email });
 
     const userEmail = tokens.user?.email ? tokens.user.email.toLowerCase() : null;
@@ -161,6 +172,7 @@ export async function GET(req: NextRequest) {
     const res = NextResponse.redirect(redirectUrl);
     res.cookies.delete('murmur_google_oauth_state');
     res.cookies.delete('murmur_auth_return_to');
+    res.cookies.delete('murmur_google_redirect_uri');
 
     // Issue secure session cookies with canonical user identity
     if (userEmail) {
@@ -182,6 +194,7 @@ export async function GET(req: NextRequest) {
     const res = NextResponse.redirect(redirectUrl);
     res.cookies.delete('murmur_google_oauth_state');
     res.cookies.delete('murmur_auth_return_to');
+    res.cookies.delete('murmur_google_redirect_uri');
     return res;
   }
 }
