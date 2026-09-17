@@ -13,7 +13,7 @@ interface AdminPasswordModalProps {
 export function AdminPasswordModal({
   isOpen,
   onClose,
-  targetTabName = 'this section',
+  targetTabName = 'Tools Directory',
   onSuccess,
   currentUserEmail,
 }: AdminPasswordModalProps) {
@@ -72,6 +72,8 @@ export function AdminPasswordModal({
     }
   };
 
+  const displayCategory = targetTabName.toUpperCase();
+
   return (
     <div
       style={{
@@ -81,7 +83,8 @@ export function AdminPasswordModal({
         right: 0,
         bottom: 0,
         backgroundColor: 'rgba(28, 11, 18, 0.45)',
-        backdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -93,85 +96,65 @@ export function AdminPasswordModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '18px',
+          backgroundColor: '#FCFAF8',
+          borderRadius: '28px',
           width: '100%',
-          maxWidth: '420px',
-          boxShadow: '0 20px 48px -10px rgba(45, 13, 25, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08)',
-          border: '1px solid var(--murmur-border-solid)',
+          maxWidth: '560px',
+          boxShadow: '0 24px 60px -15px rgba(35, 12, 22, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+          border: '1px solid rgba(230, 220, 215, 0.7)',
+          padding: '34px 38px 30px 38px',
           display: 'flex',
           flexDirection: 'column',
+          position: 'relative',
           overflow: 'hidden',
-          animation: 'murmurModalIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+          animation: 'murmurModalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        {/* Header */}
+        {/* Top Header Row */}
         <div
           style={{
-            padding: '22px 24px 16px',
-            borderBottom: '1px solid var(--murmur-border)',
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             justifyContent: 'space-between',
+            marginBottom: '16px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(45, 13, 25, 0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--murmur-plum)',
-                border: '1px solid rgba(45, 13, 25, 0.15)',
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </div>
-            <div>
-              <h2
-                style={{
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  color: 'var(--murmur-text-primary)',
-                  letterSpacing: '-0.02em',
-                  margin: 0,
-                }}
-              >
-                Admin Authorization Required
-              </h2>
-              <p
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--murmur-text-secondary)',
-                  margin: '2px 0 0 0',
-                }}
-              >
-                Access to {targetTabName} is restricted
-              </p>
-            </div>
-          </div>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#8E847E',
+            }}
+          >
+            {displayCategory}
+          </span>
 
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             style={{
-              width: '26px',
-              height: '26px',
+              width: '32px',
+              height: '32px',
               borderRadius: '50%',
-              backgroundColor: 'var(--murmur-sidebar-hover)',
+              backgroundColor: 'rgba(0, 0, 0, 0.04)',
               border: 'none',
-              color: 'var(--murmur-text-tertiary)',
+              color: '#827873',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.08)';
+              e.currentTarget.style.color = '#1B1115';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.04)';
+              e.currentTarget.style.color = '#827873';
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -181,57 +164,321 @@ export function AdminPasswordModal({
           </button>
         </div>
 
-        {/* Body */}
+        {/* Big Bold Headline & Subtitle */}
         {isUnauthorizedUser ? (
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div
+          <>
+            <h2
               style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                color: '#B91C1C',
-                borderRadius: '10px',
-                padding: '14px 16px',
-                fontSize: '12.5px',
-                lineHeight: 1.5,
+                fontSize: '36px',
+                fontWeight: 800,
+                color: '#1B1115',
+                letterSpacing: '-0.035em',
+                lineHeight: 1.1,
+                margin: '0 0 6px 0',
               }}
             >
-              <strong>Access Restricted</strong>
-              <p style={{ margin: '6px 0 0 0', fontSize: '12px' }}>
-                You are currently signed in as <strong>{currentUserEmail}</strong>. Only the administrator account (<strong style={{ color: 'var(--murmur-plum)' }}>arunkumarpatil24j2007@gmail.com</strong>) has access to {targetTabName}.
-              </p>
+              Nice try.
+            </h2>
+            <p
+              style={{
+                fontSize: '20px',
+                fontWeight: 500,
+                color: '#4A4045',
+                letterSpacing: '-0.02em',
+                margin: '0 0 22px 0',
+              }}
+            >
+              This part’s for the boss only.
+            </p>
+
+            {/* Content Row: Pink Card + Buddy Character */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '14px',
+                marginBottom: '26px',
+              }}
+            >
+              {/* Pink Card */}
+              <div
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FDF3F3',
+                  border: '1px solid #FCE4E4',
+                  borderRadius: '18px',
+                  padding: '16px 18px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '14px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '12px',
+                    backgroundColor: '#FCE6E6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#250E18',
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12.5px', lineHeight: 1.45 }}>
+                  <span style={{ color: '#685F61' }}>You’re signed in as</span>
+                  <span style={{ fontWeight: 700, color: '#1B1115', fontSize: '13.5px', wordBreak: 'break-all' }}>
+                    {currentUserEmail}
+                  </span>
+                  <div style={{ marginTop: '5px', color: '#685F61', fontSize: '12px' }}>
+                    Only the admin account{' '}
+                    <div><strong style={{ color: '#1B1115' }}>(arunkumarpatil24j2007@gmail.com)</strong></div>
+                    can access the {targetTabName}.
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Illustration */}
+              <div
+                style={{
+                  width: '135px',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <img
+                  src="/admin-guard-buddy.png"
+                  alt="Not today buddy"
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    mixBlendMode: 'multiply',
+                  }}
+                />
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--murmur-plum)',
-                color: '#FFFFFF',
-                border: 'none',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Close
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+            {/* Bottom Row */}
             <div
               style={{
-                backgroundColor: 'rgba(45, 13, 25, 0.04)',
-                border: '1px solid rgba(45, 13, 25, 0.1)',
-                borderRadius: '10px',
-                padding: '10px 12px',
-                fontSize: '12px',
-                color: 'var(--murmur-text-secondary)',
-                lineHeight: 1.45,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
               }}
             >
-              Only administrator (<strong style={{ color: 'var(--murmur-plum)' }}>arunkumarpatil24j2007@gmail.com</strong>) is authorized to access Tools & Users. Please enter your administrator password to unlock.
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '11px 26px',
+                  borderRadius: '9999px',
+                  backgroundColor: '#250E18',
+                  color: '#FFFFFF',
+                  fontSize: '13.5px',
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(37, 14, 24, 0.22)',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.backgroundColor = '#381525';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.backgroundColor = '#250E18';
+                }}
+              >
+                <span>Got it</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </button>
+
+              <div
+                style={{
+                  textAlign: 'right',
+                  fontSize: '9.5px',
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: '#A39994',
+                  lineHeight: 1.45,
+                }}
+              >
+                <div>SOME TOOLS</div>
+                <div>REQUIRE A BIGGER HAT.</div>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Password Entry Screen for Admin */
+          <form onSubmit={handleSubmit}>
+            <h2
+              style={{
+                fontSize: '36px',
+                fontWeight: 800,
+                color: '#1B1115',
+                letterSpacing: '-0.035em',
+                lineHeight: 1.1,
+                margin: '0 0 6px 0',
+              }}
+            >
+              Admin Access.
+            </h2>
+            <p
+              style={{
+                fontSize: '19px',
+                fontWeight: 500,
+                color: '#4A4045',
+                letterSpacing: '-0.02em',
+                margin: '0 0 22px 0',
+              }}
+            >
+              Enter your password to unlock the {targetTabName}.
+            </p>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '14px',
+                marginBottom: '22px',
+              }}
+            >
+              {/* Form Input Box */}
+              <div
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FDF3F3',
+                  border: '1px solid #FCE4E4',
+                  borderRadius: '18px',
+                  padding: '16px 18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '10px',
+                      backgroundColor: '#FCE6E6',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#250E18',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#8E847E', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Administrator Key
+                    </div>
+                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B1115' }}>
+                      arunkumarpatil24j2007@gmail.com
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ position: 'relative', marginTop: '2px' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Enter admin password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 36px 9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(220, 190, 190, 0.7)',
+                      fontSize: '13.5px',
+                      outline: 'none',
+                      backgroundColor: '#FFFFFF',
+                      color: '#1B1115',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: '#8E847E',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {showPassword ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Illustration */}
+              <div
+                style={{
+                  width: '135px',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <img
+                  src="/admin-guard-buddy.png"
+                  alt="Not today buddy"
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    mixBlendMode: 'multiply',
+                  }}
+                />
+              </div>
             </div>
 
             {errorMessage && (
@@ -240,12 +487,13 @@ export function AdminPasswordModal({
                   backgroundColor: 'rgba(239, 68, 68, 0.08)',
                   border: '1px solid rgba(239, 68, 68, 0.25)',
                   color: '#DC2626',
-                  borderRadius: '8px',
-                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  padding: '9px 14px',
                   fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
+                  marginBottom: '16px',
                 }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -257,100 +505,65 @@ export function AdminPasswordModal({
               </div>
             )}
 
-          <div>
-            <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--murmur-text-secondary)', display: 'block', marginBottom: '5px' }}>
-              Administrator Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                autoFocus
-                placeholder="Enter admin password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 38px 9px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--murmur-border)',
-                  fontSize: '13.5px',
-                  outline: 'none',
-                  backgroundColor: 'var(--murmur-surface)',
-                }}
-              />
+            {/* Bottom Row */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
               <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
+                type="submit"
+                disabled={isLoading}
                 style={{
-                  position: 'absolute',
-                  right: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--murmur-text-tertiary)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
+                  gap: '10px',
+                  padding: '11px 26px',
+                  borderRadius: '9999px',
+                  backgroundColor: '#250E18',
+                  color: '#FFFFFF',
+                  fontSize: '13.5px',
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: isLoading ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(37, 14, 24, 0.22)',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.backgroundColor = '#381525';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.backgroundColor = '#250E18';
                 }}
               >
-                {showPassword ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                )}
+                <span>{isLoading ? 'Verifying...' : 'Unlock Access'}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
               </button>
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                flex: 1,
-                padding: '9px',
-                borderRadius: '8px',
-                border: '1px solid var(--murmur-border)',
-                backgroundColor: 'transparent',
-                color: 'var(--murmur-text-secondary)',
-                fontSize: '12.5px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={{
-                flex: 2,
-                padding: '9px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--murmur-plum)',
-                color: '#FFFFFF',
-                border: 'none',
-                fontSize: '12.5px',
-                fontWeight: 600,
-                cursor: isLoading ? 'wait' : 'pointer',
-                boxShadow: '0 2px 6px rgba(45, 13, 25, 0.2)',
-              }}
-            >
-              {isLoading ? 'Verifying...' : 'Unlock Access'}
-            </button>
-          </div>
-        </form>
-      )}
+              <div
+                style={{
+                  textAlign: 'right',
+                  fontSize: '9.5px',
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: '#A39994',
+                  lineHeight: 1.45,
+                }}
+              >
+                <div>SOME TOOLS</div>
+                <div>REQUIRE A BIGGER HAT.</div>
+              </div>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
