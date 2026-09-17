@@ -1,12 +1,14 @@
-// app/api/auth/session/route.ts — Returns active Google / Murmur session for Desktop App & Web
+// app/api/auth/session/route.ts — Returns active session for Desktop App & Web
+// Strictly returns authenticated: false for unauthenticated / Incognito visitors.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { tokenStore } from '@/lib/token-store';
+import { getAuthenticatedUser } from '@/lib/auth-session';
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const tokens = await tokenStore.getTokens();
-    if (!tokens || !tokens.user?.email) {
+    const user = await getAuthenticatedUser(req);
+
+    if (!user) {
       return NextResponse.json({
         authenticated: false,
         session: null,
@@ -15,11 +17,17 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json({
       authenticated: true,
-      email: tokens.user.email,
-      name: tokens.user.name || 'Arunkumar Patil',
-      picture: tokens.user.picture || null,
-      expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-      scopes: tokens.scope ? tokens.scope.split(' ') : [],
+      id: user.id,
+      email: user.email,
+      name: user.name || user.email.split('@')[0],
+      picture: user.picture || null,
+      provider: user.provider || 'murmur',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name || user.email.split('@')[0],
+        picture: user.picture || null,
+      },
     });
   } catch (err) {
     return NextResponse.json(

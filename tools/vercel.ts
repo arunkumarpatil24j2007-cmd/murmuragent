@@ -59,16 +59,24 @@ const vercelDeploy: ToolDefinition = {
 };
 
 import { connectorsStore } from '@/lib/connectors-store';
+import type { ToolContext } from './registry';
 
-async function getVercelToken(): Promise<string | null> {
-  return connectorsStore.getConnectorToken('vercel');
+async function getVercelToken(context?: ToolContext): Promise<{ token?: string; error?: string }> {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Vercel account in the Connections tab.',
+    };
+  }
+  const token = await connectorsStore.getConnectorToken('vercel', context.userId);
+  if (!token) {
+    return {
+      error: 'Vercel is not connected for your account. Please connect your Vercel account in the Connections tab.',
+    };
+  }
+  return { token };
 }
 
-async function vercelFetch(path: string): Promise<Response> {
-  const token = await getVercelToken();
-  if (!token) {
-    throw new Error('Vercel API token not configured. Connect your Vercel account in Connectors.');
-  }
+async function vercelFetch(path: string, token: string): Promise<Response> {
   return fetch(`https://api.vercel.com${path}`, {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -79,14 +87,14 @@ async function vercelFetch(path: string): Promise<Response> {
 
 export function registerVercelTools(): void {
   // List projects
-  toolRegistry.register(vercelListProjects, async (args) => {
-    const token = await getVercelToken();
-    if (!token) {
-      return { success: false, error: 'Vercel API token not configured. Connect your Vercel account in Connectors.' };
+  toolRegistry.register(vercelListProjects, async (args, context) => {
+    const { token, error } = await getVercelToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Vercel not connected' };
     }
     try {
       const limit = (args.limit as number) || 20;
-      const res = await vercelFetch(`/v9/projects?limit=${limit}`);
+      const res = await vercelFetch(`/v9/projects?limit=${limit}`, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `Vercel API error (${res.status}): ${err}` };
@@ -114,12 +122,13 @@ export function registerVercelTools(): void {
   });
 
   // Get project
-  toolRegistry.register(vercelGetProject, async (args) => {
-    if (!await getVercelToken()) {
-      return { success: false, error: 'Vercel API token not configured.' };
+  toolRegistry.register(vercelGetProject, async (args, context) => {
+    const { token, error } = await getVercelToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Vercel not connected' };
     }
     try {
-      const res = await vercelFetch(`/v9/projects/${args.projectId}`);
+      const res = await vercelFetch(`/v9/projects/${args.projectId}`, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `Project not found (${res.status}): ${err}` };
@@ -145,9 +154,10 @@ export function registerVercelTools(): void {
   });
 
   // List deployments
-  toolRegistry.register(vercelListDeployments, async (args) => {
-    if (!await getVercelToken()) {
-      return { success: false, error: 'Vercel API token not configured.' };
+  toolRegistry.register(vercelListDeployments, async (args, context) => {
+    const { token, error } = await getVercelToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Vercel not connected' };
     }
     try {
       const limit = (args.limit as number) || 10;
@@ -155,7 +165,7 @@ export function registerVercelTools(): void {
       if (args.projectId) {
         path += `&projectId=${args.projectId}`;
       }
-      const res = await vercelFetch(path);
+      const res = await vercelFetch(path, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `Vercel API error (${res.status}): ${err}` };
@@ -178,12 +188,13 @@ export function registerVercelTools(): void {
   });
 
   // Get deployment
-  toolRegistry.register(vercelGetDeployment, async (args) => {
-    if (!await getVercelToken()) {
-      return { success: false, error: 'Vercel API token not configured.' };
+  toolRegistry.register(vercelGetDeployment, async (args, context) => {
+    const { token, error } = await getVercelToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Vercel not connected' };
     }
     try {
-      const res = await vercelFetch(`/v13/deployments/${args.deploymentId}`);
+      const res = await vercelFetch(`/v13/deployments/${args.deploymentId}`, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `Deployment not found (${res.status}): ${err}` };
@@ -208,9 +219,10 @@ export function registerVercelTools(): void {
   });
 
   // Deploy (DANGEROUS)
-  toolRegistry.register(vercelDeploy, async (args) => {
-    if (!await getVercelToken()) {
-      return { success: false, error: 'Vercel API token not configured.' };
+  toolRegistry.register(vercelDeploy, async (args, context) => {
+    const { token, error } = await getVercelToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Vercel not connected' };
     }
     // This would trigger a deployment via Vercel API
     // For now, return a structured message explaining capability

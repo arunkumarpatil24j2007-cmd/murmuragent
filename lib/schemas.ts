@@ -82,6 +82,7 @@ export interface AgentEvent {
     step?: string;
     progress?: string;
     requiresConfirmation?: boolean;
+    retryable?: boolean;
   };
 }
 

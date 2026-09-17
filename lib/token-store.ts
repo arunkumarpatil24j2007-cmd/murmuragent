@@ -36,7 +36,7 @@ export interface GoogleAccountSummary {
 
 export interface PersistentTokenStore {
   getTokens(accountId?: string): Promise<GoogleStoredTokens | null>;
-  saveTokens(tokens: GoogleStoredTokens, isPrimary?: boolean): Promise<void>;
+  saveTokens(tokens: GoogleStoredTokens, isPrimary?: boolean, customAccountId?: string): Promise<void>;
   deleteTokens(accountId?: string): Promise<void>;
   listAccounts(): Promise<GoogleAccountSummary[]>;
   getStoreType(): 'supabase' | 'local';
@@ -98,13 +98,17 @@ class SupabaseTokenStore implements PersistentTokenStore {
   }
 
   async getTokens(accountId?: string): Promise<GoogleStoredTokens | null> {
+    // CRITICAL: Never return default or developer tokens if no account ID / user ID is provided!
+    if (!accountId || !accountId.trim()) {
+      return null;
+    }
+
     try {
-      let endpoint = `${this.url}/rest/v1/google_oauth_accounts?select=*`;
-      if (accountId) {
-        endpoint += `&account_id=eq.${encodeURIComponent(accountId)}&limit=1`;
-      } else {
-        endpoint += `&is_primary=eq.true&limit=1`;
-      }
+      const cleanId = accountId.trim();
+      // Look up by exact account_id, or by user:<userId>:google, or by email
+      const encodedId = encodeURIComponent(cleanId);
+      const encodedUserKey = encodeURIComponent(`user:${cleanId}:google`);
+      const endpoint = `${this.url}/rest/v1/google_oauth_accounts?or=(account_id.eq.${encodedId},account_id.eq.${encodedUserKey},email.eq.${encodedId})&order=updated_at.desc&limit=1`;
 
       const res = await fetch(endpoint, {
         method: 'GET',
@@ -117,21 +121,7 @@ class SupabaseTokenStore implements PersistentTokenStore {
         return null;
       }
 
-      let rows = await res.json();
-      if (!Array.isArray(rows) || rows.length === 0) {
-        if (!accountId) {
-          // Fallback: fetch most recently updated account
-          const fallbackRes = await fetch(`${this.url}/rest/v1/google_oauth_accounts?select=*&order=updated_at.desc&limit=1`, {
-            method: 'GET',
-            headers: this.headers,
-            cache: 'no-store',
-          });
-          if (fallbackRes.ok) {
-            rows = await fallbackRes.json();
-          }
-        }
-      }
-
+      const rows = await res.json();
       if (!Array.isArray(rows) || rows.length === 0) {
         return null;
       }
@@ -153,8 +143,8 @@ class SupabaseTokenStore implements PersistentTokenStore {
     }
   }
 
-  async saveTokens(tokens: GoogleStoredTokens, isPrimary = true): Promise<void> {
-    const accountId = tokens.user?.email || 'primary_account';
+  async saveTokens(tokens: GoogleStoredTokens, isPrimary = true, customAccountId?: string): Promise<void> {
+    const accountId = customAccountId || tokens.user?.email || 'primary_account';
     const email = tokens.user?.email || accountId;
     const name = tokens.user?.name || null;
     const picture = tokens.user?.picture || null;
@@ -173,8 +163,8 @@ class SupabaseTokenStore implements PersistentTokenStore {
     const encryptedTokens = encryptPayload(tokenPayload);
 
     try {
-      // If marking as primary, unmark others
-      if (isPrimary) {
+      // If explicitly marked as primary, unmark others
+      if (isPrimary && !customAccountId) {
         await fetch(`${this.url}/rest/v1/google_oauth_accounts?is_primary=eq.true`, {
           method: 'PATCH',
           headers: this.headers,
@@ -347,36 +337,31 @@ class LocalFileTokenStore implements PersistentTokenStore {
   }
 
   async getTokens(accountId?: string): Promise<GoogleStoredTokens | null> {
+    if (!accountId || !accountId.trim()) {
+      return null;
+    }
+
     const store = this.readStore();
-    if (accountId) {
-      const record = store.accounts[accountId];
-      if (!record) return null;
-      const decrypted = decryptPayload(record.encryptedData);
-      return decrypted ? JSON.parse(decrypted) : null;
-    }
+    const cleanId = accountId.trim();
 
-    // Default: find primary account
-    const primaryId = store.primaryAccountId;
-    if (primaryId && store.accounts[primaryId]) {
-      const record = store.accounts[primaryId];
-      const decrypted = decryptPayload(record.encryptedData);
-      return decrypted ? JSON.parse(decrypted) : null;
-    }
+    // Check exact match, user-prefixed match, or email match
+    const record =
+      store.accounts[cleanId] ||
+      store.accounts[`user:${cleanId}:google`] ||
+      Object.values(store.accounts).find((a) => a.email.toLowerCase() === cleanId.toLowerCase());
 
-    // Fallback if primary not set: first available account
-    const first = Object.values(store.accounts)[0];
-    if (!first) return null;
-    const decrypted = decryptPayload(first.encryptedData);
+    if (!record) return null;
+    const decrypted = decryptPayload(record.encryptedData);
     return decrypted ? JSON.parse(decrypted) : null;
   }
 
-  async saveTokens(tokens: GoogleStoredTokens, isPrimary = true): Promise<void> {
+  async saveTokens(tokens: GoogleStoredTokens, isPrimary = true, customAccountId?: string): Promise<void> {
     const store = this.readStore();
-    const accountId = tokens.user?.email || 'local_user';
+    const accountId = customAccountId || tokens.user?.email || 'local_user';
     const email = tokens.user?.email || accountId;
     const encryptedData = encryptPayload(JSON.stringify(tokens));
 
-    if (isPrimary) {
+    if (isPrimary && !customAccountId) {
       for (const key of Object.keys(store.accounts)) {
         store.accounts[key].isPrimary = false;
       }
@@ -388,14 +373,14 @@ class LocalFileTokenStore implements PersistentTokenStore {
       email,
       name: tokens.user?.name,
       picture: tokens.user?.picture,
-      isPrimary,
+      isPrimary: isPrimary && !customAccountId,
       encryptedData,
       scopes: tokens.scope ? tokens.scope.split(' ') : [],
       expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : undefined,
       updatedAt: tokens.updatedAt,
     };
 
-    if (!store.primaryAccountId) {
+    if (!store.primaryAccountId && !customAccountId) {
       store.primaryAccountId = accountId;
     }
 

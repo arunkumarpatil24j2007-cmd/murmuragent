@@ -82,7 +82,8 @@ export async function processMessage(
   conversationId: string,
   emit: (event: AgentEvent) => void,
   modelPreference?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  userId?: string | null
 ): Promise<{ content: string; model: string; taskState: TaskState }> {
   await initializeAgent();
 
@@ -151,7 +152,7 @@ export async function processMessage(
   // Get available tools for the model
   const availableTools = toolRegistry.getAllDefinitions();
 
-  const ctx: ExecutionContext = { emit, signal };
+  const ctx: ExecutionContext = { emit, signal, userId };
 
   // === AGENT LOOP ===
   let stepCount = 0;

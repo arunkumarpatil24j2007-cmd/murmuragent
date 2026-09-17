@@ -63,15 +63,32 @@ const driveOpen: ToolDefinition = {
   source: 'api',
 };
 
+/// MARK: - Auth Helper
+
+async function getDriveAuth(context?: import('../registry').ToolContext) {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Google account in the Connections tab to access Google Drive.',
+    };
+  }
+  const auth = await getAuthenticatedGoogleClient(context.userId);
+  if (!auth) {
+    return {
+      error: 'Google Drive is not connected for your account. Please connect your Google account in the Connections tab.',
+    };
+  }
+  return { auth };
+}
+
 // MARK: - Registrations
 
 export function registerDriveTools(): void {
   // 1. Search Files
-  toolRegistry.register(driveSearch, async (args) => {
+  toolRegistry.register(driveSearch, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDriveAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const drive = google.drive({ version: 'v3', auth });
@@ -118,11 +135,11 @@ export function registerDriveTools(): void {
   });
 
   // 2. List Files
-  toolRegistry.register(driveList, async (args) => {
+  toolRegistry.register(driveList, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDriveAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const drive = google.drive({ version: 'v3', auth });
@@ -147,6 +164,7 @@ export function registerDriveTools(): void {
         mimeType: f.mimeType,
         url: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
         modifiedTime: f.modifiedTime,
+        size: f.size,
       }));
 
       return {
@@ -164,11 +182,11 @@ export function registerDriveTools(): void {
   });
 
   // 3. Get File Details
-  toolRegistry.register(driveGet, async (args) => {
+  toolRegistry.register(driveGet, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDriveAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const fileId = args.fileId as string;
@@ -200,11 +218,11 @@ export function registerDriveTools(): void {
   });
 
   // 4. Create Folder
-  toolRegistry.register(driveCreateFolder, async (args) => {
+  toolRegistry.register(driveCreateFolder, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDriveAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const name = args.name as string;
@@ -235,11 +253,11 @@ export function registerDriveTools(): void {
   });
 
   // 5. Open File Link
-  toolRegistry.register(driveOpen, async (args) => {
+  toolRegistry.register(driveOpen, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDriveAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const fileId = args.fileId as string;

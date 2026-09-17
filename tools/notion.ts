@@ -51,16 +51,24 @@ const notionUpdatePage: ToolDefinition = {
 };
 
 import { connectorsStore } from '@/lib/connectors-store';
+import type { ToolContext } from './registry';
 
-async function getNotionToken(): Promise<string | null> {
-  return connectorsStore.getConnectorToken('notion');
+async function getNotionToken(context?: ToolContext): Promise<{ token?: string; error?: string }> {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Notion workspace in the Connections tab.',
+    };
+  }
+  const token = await connectorsStore.getConnectorToken('notion', context.userId);
+  if (!token) {
+    return {
+      error: 'Notion is not connected for your account. Please connect your Notion workspace in the Connections tab.',
+    };
+  }
+  return { token };
 }
 
-async function notionFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const token = await getNotionToken();
-  if (!token) {
-    throw new Error('Notion API token not configured. Connect your Notion workspace in Connectors.');
-  }
+async function notionFetch(path: string, token: string, options: RequestInit = {}): Promise<Response> {
   return fetch(`https://api.notion.com/v1${path}`, {
     ...options,
     headers: {
@@ -74,17 +82,17 @@ async function notionFetch(path: string, options: RequestInit = {}): Promise<Res
 
 export function registerNotionTools(): void {
   // Search
-  toolRegistry.register(notionSearch, async (args) => {
-    const token = await getNotionToken();
-    if (!token) {
-      return { success: false, error: 'Notion API token not configured. Connect your Notion workspace in Connectors.' };
+  toolRegistry.register(notionSearch, async (args, context) => {
+    const { token, error } = await getNotionToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Notion not connected' };
     }
     try {
       const body: Record<string, unknown> = { query: args.query as string };
       if (args.filter) {
         body.filter = { value: args.filter, property: 'object' };
       }
-      const res = await notionFetch('/search', {
+      const res = await notionFetch('/search', token, {
         method: 'POST',
         body: JSON.stringify(body),
       });
@@ -108,14 +116,15 @@ export function registerNotionTools(): void {
   });
 
   // Read page
-  toolRegistry.register(notionReadPage, async (args) => {
-    if (!await getNotionToken()) {
-      return { success: false, error: 'Notion API token not configured.' };
+  toolRegistry.register(notionReadPage, async (args, context) => {
+    const { token, error } = await getNotionToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Notion not connected' };
     }
     try {
       const pageId = args.pageId as string;
       // Get page metadata
-      const pageRes = await notionFetch(`/pages/${pageId}`);
+      const pageRes = await notionFetch(`/pages/${pageId}`, token);
       if (!pageRes.ok) {
         const err = await pageRes.text();
         return { success: false, error: `Failed to read page (${pageRes.status}): ${err}` };
@@ -123,7 +132,7 @@ export function registerNotionTools(): void {
       const page = await pageRes.json();
 
       // Get page content blocks
-      const blocksRes = await notionFetch(`/blocks/${pageId}/children?page_size=100`);
+      const blocksRes = await notionFetch(`/blocks/${pageId}/children?page_size=100`, token);
       let blocks: unknown[] = [];
       if (blocksRes.ok) {
         const blocksData = await blocksRes.json();
@@ -146,9 +155,10 @@ export function registerNotionTools(): void {
   });
 
   // Create page
-  toolRegistry.register(notionCreatePage, async (args) => {
-    if (!await getNotionToken()) {
-      return { success: false, error: 'Notion API token not configured.' };
+  toolRegistry.register(notionCreatePage, async (args, context) => {
+    const { token, error } = await getNotionToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Notion not connected' };
     }
     try {
       const title = args.title as string;
@@ -188,7 +198,7 @@ export function registerNotionTools(): void {
         body.parent = { type: 'workspace', workspace: true };
       }
 
-      const res = await notionFetch('/pages', {
+      const res = await notionFetch('/pages', token, {
         method: 'POST',
         body: JSON.stringify(body),
       });
@@ -214,9 +224,10 @@ export function registerNotionTools(): void {
   });
 
   // Update page
-  toolRegistry.register(notionUpdatePage, async (args) => {
-    if (!await getNotionToken()) {
-      return { success: false, error: 'Notion API token not configured.' };
+  toolRegistry.register(notionUpdatePage, async (args, context) => {
+    const { token, error } = await getNotionToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'Notion not connected' };
     }
     try {
       const pageId = args.pageId as string;
@@ -230,7 +241,7 @@ export function registerNotionTools(): void {
         },
       }));
 
-      const res = await notionFetch(`/blocks/${pageId}/children`, {
+      const res = await notionFetch(`/blocks/${pageId}/children`, token, {
         method: 'PATCH',
         body: JSON.stringify({ children }),
       });

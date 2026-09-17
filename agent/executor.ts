@@ -1,20 +1,17 @@
 // agent/executor.ts — Executes tool calls with permission checking and error handling
 
 import { toolRegistry } from '@/tools/registry';
-import { canAutoExecute, validateToolArguments } from './permissions';
+import { canAutoExecute, validateToolArguments, registerPendingPermission } from './permissions';
 import { logger } from '@/lib/logger';
 import type { ToolCall, ToolResult, AgentEvent } from '@/lib/schemas';
 
 export interface ExecutionContext {
   /** Callback to emit events to the UI */
   emit: (event: AgentEvent) => void;
-  /** Pending permission requests (for DANGEROUS tools) */
-  pendingPermission?: {
-    toolCall: ToolCall;
-    resolve: (allowed: boolean) => void;
-  };
   /** Optional cancellation signal to terminate actions */
   signal?: AbortSignal;
+  /** Authenticated user id if logged in, null for guest */
+  userId?: string | null;
 }
 
 /**
@@ -74,27 +71,49 @@ export async function executeToolCall(
     };
   }
 
-  // Check permissions
+  // Check permissions: if sensitive/external/destructive, pause execution and wait for user response from Notch
   if (!canAutoExecute(definition)) {
+    const actionDesc = humanReadableAction(toolCall);
     ctx.emit({
       type: 'permission_required',
       timestamp: new Date().toISOString(),
       data: {
         tool: toolCall.tool,
         toolCallId: toolCall.id,
-        action: humanReadableAction(toolCall),
+        action: actionDesc,
         permission: definition.permission,
         requiresConfirmation: true,
-        text: `Ready to execute: ${humanReadableAction(toolCall)}?`,
+        text: `Permission required to ${actionDesc}`,
       },
     });
 
-    return {
-      toolCallId: toolCall.id,
-      tool: toolCall.tool,
-      success: false,
-      error: `Tool ${toolCall.tool} requires user confirmation. Present the prepared details clearly to the user and explicitly ask for confirmation before executing (e.g. "I am ready to ${humanReadableAction(toolCall)}. Should I proceed?"). Do not execute until confirmed.`,
-    };
+    const allowed = await registerPendingPermission(
+      toolCall.id,
+      toolCall.tool,
+      actionDesc,
+      toolCall.arguments,
+      ctx.signal
+    );
+
+    if (!allowed) {
+      ctx.emit({
+        type: 'tool_failed',
+        timestamp: new Date().toISOString(),
+        data: {
+          tool: toolCall.tool,
+          toolCallId: toolCall.id,
+          error: 'User denied permission',
+          retryable: false,
+        },
+      });
+
+      return {
+        toolCallId: toolCall.id,
+        tool: toolCall.tool,
+        success: false,
+        error: `User denied permission to execute ${toolCall.tool} (${actionDesc}). Explain to the user that the action was not executed.`,
+      };
+    }
   }
 
   // Emit tool started event
@@ -108,8 +127,11 @@ export async function executeToolCall(
     },
   });
 
-  // Execute the tool
-  const result = await toolRegistry.execute(toolCall.tool, toolCall.arguments);
+  // Execute the tool with user context
+  const result = await toolRegistry.execute(toolCall.tool, toolCall.arguments, {
+    userId: ctx.userId,
+    signal: ctx.signal,
+  });
   result.toolCallId = toolCall.id;
 
   // Emit result event
@@ -136,6 +158,7 @@ export async function executeToolCall(
         tool: toolCall.tool,
         toolCallId: toolCall.id,
         error: result.error || 'Unknown error',
+        retryable: true,
       },
     });
   }

@@ -1,6 +1,7 @@
-// lib/connectors-store.ts — Cloud Connectors Store & Registry
+// lib/connectors-store.ts — User-Scoped Cloud Connectors Store & Registry
 // Manages authentication, connection statuses, enabled/disabled toggles,
 // and dynamic credential resolution for Google Workspace, Notion, Vercel, GitHub, etc.
+// STRICT MULTI-USER ISOLATION: Developer credentials are NEVER used as defaults for visitors.
 
 import fs from 'fs';
 import path from 'path';
@@ -59,17 +60,25 @@ interface StoredConnectorConfig {
   };
 }
 
-type ConnectorsConfigMap = Record<string, StoredConnectorConfig>;
+// Keyed by userId -> connectorId -> config
+type ConnectorsConfigMap = Record<string, Record<string, StoredConnectorConfig>>;
 
 const CONNECTORS_FILE_PATH = path.join(process.cwd(), '.connectors.json');
 
 // Base catalog of supported Cloud Connectors
-export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isConnected' | 'isEnabled' | 'accountLabel' | 'accountEmail' | 'accountAvatar' | 'lastConnectedAt'>> = {
+export const CONNECTOR_DEFINITIONS: Record<
+  ConnectorId,
+  Omit<
+    ConnectorInfo,
+    'isConnected' | 'isEnabled' | 'accountLabel' | 'accountEmail' | 'accountAvatar' | 'lastConnectedAt'
+  >
+> = {
   google_drive: {
     id: 'google_drive',
     name: 'Google Drive',
     shortDescription: 'Search, read, create, and organize files in Google Drive.',
-    longDescription: 'Direct access to your cloud drive. Read doc contents, locate project files, search file metadata, and upload newly generated assets autonomously.',
+    longDescription:
+      'Direct access to your cloud drive. Read doc contents, locate project files, search file metadata, and upload newly generated assets autonomously.',
     category: 'workspace',
     categoryLabel: 'Google Workspace',
     icon: 'drive',
@@ -88,7 +97,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'google_sheets',
     name: 'Google Sheets',
     shortDescription: 'Create, read, append rows, and manage spreadsheets.',
-    longDescription: 'Full spreadsheet intelligence. Query cell ranges, populate financial projections, append lead lists, and create formatted spreadsheets in real-time.',
+    longDescription:
+      'Full spreadsheet intelligence. Query cell ranges, populate financial projections, append lead lists, and create formatted spreadsheets in real-time.',
     category: 'workspace',
     categoryLabel: 'Google Workspace',
     icon: 'sheets',
@@ -106,7 +116,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'google_docs',
     name: 'Google Docs',
     shortDescription: 'Read, draft, and append rich Google Docs.',
-    longDescription: 'Collaborative document authoring. Generate research briefs, append meeting summaries, and produce clean styled Google Docs with direct sharing links.',
+    longDescription:
+      'Collaborative document authoring. Generate research briefs, append meeting summaries, and produce clean styled Google Docs with direct sharing links.',
     category: 'workspace',
     categoryLabel: 'Google Workspace',
     icon: 'docs',
@@ -123,7 +134,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'google_calendar',
     name: 'Google Calendar',
     shortDescription: 'Schedule meetings, view calendar events, and manage schedule.',
-    longDescription: 'Autonomous calendar intelligence. Schedule meetings with attendees, verify conflicts, search upcoming schedule, and generate direct clickable Google Calendar links.',
+    longDescription:
+      'Autonomous calendar intelligence. Schedule meetings with attendees, verify conflicts, search upcoming schedule, and generate direct clickable Google Calendar links.',
     category: 'workspace',
     categoryLabel: 'Google Workspace',
     icon: 'calendar',
@@ -140,7 +152,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'gmail',
     name: 'Gmail',
     shortDescription: 'Search, read, draft, and send emails securely.',
-    longDescription: 'Autonomous communication agent. Inspect urgent threads, draft executive responses, search conversations, and send verified email updates.',
+    longDescription:
+      'Autonomous communication agent. Inspect urgent threads, draft executive responses, search conversations, and send verified email updates.',
     category: 'workspace',
     categoryLabel: 'Google Workspace',
     icon: 'gmail',
@@ -158,7 +171,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'notion',
     name: 'Notion',
     shortDescription: 'Connect pages, databases, and project roadmaps.',
-    longDescription: 'Full workspace memory. Query internal databases, read team wikis, draft documentation pages, and create task tickets directly in Notion.',
+    longDescription:
+      'Full workspace memory. Query internal databases, read team wikis, draft documentation pages, and create task tickets directly in Notion.',
     category: 'workspace',
     categoryLabel: 'Knowledge & Docs',
     icon: 'notion',
@@ -177,7 +191,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'vercel',
     name: 'Vercel',
     shortDescription: 'Inspect deployments, build logs, and deploy projects.',
-    longDescription: 'DevOps cloud connector. Check production preview URLs, inspect build errors, query project status, and trigger staging/prod deployments.',
+    longDescription:
+      'DevOps cloud connector. Check production preview URLs, inspect build errors, query project status, and trigger staging/prod deployments.',
     category: 'developer',
     categoryLabel: 'Cloud & Hosting',
     icon: 'vercel',
@@ -196,7 +211,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'github',
     name: 'GitHub',
     shortDescription: 'Browse repositories, track issues, and manage pull requests.',
-    longDescription: 'Autonomous software engineering integration. Query open pull requests, inspect commits, file bug reports, and review code diffs across your repositories.',
+    longDescription:
+      'Autonomous software engineering integration. Query open pull requests, inspect commits, file bug reports, and review code diffs across your repositories.',
     category: 'developer',
     categoryLabel: 'Developer Tools',
     icon: 'github',
@@ -215,7 +231,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'airtop',
     name: 'Airtop Web Browser',
     shortDescription: 'Autonomous cloud browser for dynamic web tasks.',
-    longDescription: 'Interact with any web application. Scrape dynamic JavaScript websites, fill forms, take screenshots, and run autonomous browser workflows.',
+    longDescription:
+      'Interact with any web application. Scrape dynamic JavaScript websites, fill forms, take screenshots, and run autonomous browser workflows.',
     category: 'automation',
     categoryLabel: 'Web & Automation',
     icon: 'airtop',
@@ -233,7 +250,8 @@ export const CONNECTOR_DEFINITIONS: Record<ConnectorId, Omit<ConnectorInfo, 'isC
     id: 'palmier',
     name: 'Palmier MCP Client',
     shortDescription: 'Model Context Protocol connector for local desktop context.',
-    longDescription: 'Bridge between web agent and local macOS context. Discover and execute local MCP tools securely.',
+    longDescription:
+      'Bridge between web agent and local macOS context. Discover and execute local MCP tools securely.',
     category: 'local',
     categoryLabel: 'Desktop & MCP',
     icon: 'palmier',
@@ -255,7 +273,14 @@ class ConnectorsStore {
     try {
       if (fs.existsSync(CONNECTORS_FILE_PATH)) {
         const raw = fs.readFileSync(CONNECTORS_FILE_PATH, 'utf-8');
-        this.configCache = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+
+        // Migration helper: If old format (flat connectorId -> config), namespace it under 'legacy'
+        if (parsed && !parsed.google_drive && !parsed.notion) {
+          this.configCache = parsed;
+        } else {
+          this.configCache = { legacy: parsed || {} };
+        }
         return this.configCache || {};
       }
     } catch (err) {
@@ -277,76 +302,194 @@ class ConnectorsStore {
   }
 
   /**
+   * Helper: Supabase REST headers with service_role key
+   */
+  private get supabaseHeaders(): Record<string, string> | null {
+    if (!env.supabase.url || !env.supabase.serviceRoleKey) return null;
+    return {
+      apikey: env.supabase.serviceRoleKey,
+      Authorization: `Bearer ${env.supabase.serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  /**
    * Returns whether a connector is enabled (active for the agent).
    * Defaults to true if connected.
    */
-  async isConnectorEnabled(id: ConnectorId): Promise<boolean> {
+  async isConnectorEnabled(id: ConnectorId, userId?: string | null): Promise<boolean> {
+    if (!userId) return false;
     const config = this.loadConfig();
-    if (config[id] && config[id].enabled !== undefined) {
-      return config[id].enabled;
+    const userMap = config[userId] || {};
+    if (userMap[id] && userMap[id].enabled !== undefined) {
+      return userMap[id].enabled;
     }
     return true;
   }
 
   /**
-   * Retrieves active token for a connector (custom user token first, then server environment fallback).
+   * Retrieves active token for a connector scoped strictly to the authenticated user.
+   * CRITICAL: Returns null for guest/unauthenticated calls.
+   * Never falls back to developer personal credentials in environment variables!
    */
-  async getConnectorToken(id: ConnectorId): Promise<string | null> {
+  async getConnectorToken(id: ConnectorId, userId?: string | null): Promise<string | null> {
+    if (!userId || !userId.trim()) {
+      return null;
+    }
+
+    const cleanUserId = userId.trim();
+
+    // 1. Check Supabase user_connections or google_oauth_accounts
+    if (this.supabaseHeaders && env.supabase.url) {
+      try {
+        const supabaseBase = env.supabase.url.replace(/\/$/, '');
+
+        // Try user_connections table first
+        const connRes = await fetch(
+          `${supabaseBase}/rest/v1/user_connections?user_id=eq.${encodeURIComponent(cleanUserId)}&provider=eq.${encodeURIComponent(id)}&limit=1`,
+          { headers: this.supabaseHeaders, cache: 'no-store' }
+        );
+
+        if (connRes.ok) {
+          const rows = await connRes.json();
+          if (Array.isArray(rows) && rows.length > 0 && rows[0].encrypted_access_token) {
+            const decrypted = decryptPayload(rows[0].encrypted_access_token);
+            if (decrypted) return decrypted;
+          }
+        }
+
+        // Try user-scoped record in google_oauth_accounts (e.g. account_id = 'user:<userId>:<provider>')
+        const oauthRes = await fetch(
+          `${supabaseBase}/rest/v1/google_oauth_accounts?account_id=eq.${encodeURIComponent(`user:${cleanUserId}:${id}`)}&limit=1`,
+          { headers: this.supabaseHeaders, cache: 'no-store' }
+        );
+
+        if (oauthRes.ok) {
+          const rows = await oauthRes.json();
+          if (Array.isArray(rows) && rows.length > 0 && rows[0].encrypted_tokens) {
+            const decrypted = decryptPayload(rows[0].encrypted_tokens);
+            if (decrypted) {
+              try {
+                const parsed = JSON.parse(decrypted);
+                return parsed.token || parsed.access_token || decrypted;
+              } catch {
+                return decrypted;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn('ConnectorsStore', 'Error querying Supabase for user connector token', { error: String(err) });
+      }
+    }
+
+    // 2. Check local file store partitioned by userId
     const config = this.loadConfig();
-    const item = config[id];
+    const userMap = config[cleanUserId];
+    const item = userMap?.[id];
 
     if (item?.encryptedToken) {
       const decrypted = decryptPayload(item.encryptedToken);
       if (decrypted) return decrypted;
     }
 
-    // Fallback to environment variables
-    switch (id) {
-      case 'notion':
-        return env.notion.token || process.env.NOTION_TOKEN || null;
-      case 'vercel':
-        return env.vercel.token || process.env.VERCEL_TOKEN || null;
-      case 'github':
-        return process.env.GITHUB_TOKEN || null;
-      case 'airtop':
-        return env.airtop.apiKey || process.env.AIRTOP_API_KEY || null;
-      default:
-        return null;
-    }
+    // CRITICAL: Absolutely no fallback to process.env.NOTION_TOKEN or VERCEL_TOKEN!
+    return null;
   }
 
   /**
    * List all connectors with real-time connection status & account details.
+   * If userId is missing or guest, ALL user-specific connectors return isConnected: false.
    */
-  async getAllConnectors(): Promise<ConnectorInfo[]> {
+  async getAllConnectors(userId?: string | null): Promise<ConnectorInfo[]> {
+    const cleanUserId = userId?.trim() || null;
     const config = this.loadConfig();
+    const userMap = cleanUserId ? config[cleanUserId] || {} : {};
 
-    // Check Google Auth status from tokenStore
+    // 1. Check Google Auth status for this user
     let googleConnected = false;
     let googleAccount: { email?: string; name?: string; picture?: string } = {};
 
-    try {
-      const googleTokens = await tokenStore.getTokens();
-      if (googleTokens && (googleTokens.access_token || googleTokens.refresh_token)) {
-        googleConnected = true;
-        googleAccount = googleTokens.user || {};
+    if (cleanUserId) {
+      try {
+        const googleTokens = await tokenStore.getTokens(cleanUserId);
+        if (googleTokens && (googleTokens.access_token || googleTokens.refresh_token)) {
+          googleConnected = true;
+          googleAccount = googleTokens.user || {};
+        }
+      } catch (err) {
+        logger.warn('ConnectorsStore', 'Could not check Google tokens for user', { error: String(err), userId: cleanUserId });
       }
-    } catch (err) {
-      logger.warn('ConnectorsStore', 'Could not check Google token store', { error: String(err) });
+    }
+
+    // 2. Fetch all user connections from Supabase if authenticated
+    const remoteConnections: Record<string, { label?: string; email?: string; avatar?: string; connectedAt?: string; hasToken: boolean }> = {};
+
+    if (cleanUserId && this.supabaseHeaders && env.supabase.url) {
+      try {
+        const supabaseBase = env.supabase.url.replace(/\/$/, '');
+
+        // Check user_connections table
+        const res = await fetch(
+          `${supabaseBase}/rest/v1/user_connections?user_id=eq.${encodeURIComponent(cleanUserId)}`,
+          { headers: this.supabaseHeaders, cache: 'no-store' }
+        );
+
+        if (res.ok) {
+          const rows = await res.json();
+          if (Array.isArray(rows)) {
+            for (const r of rows) {
+              remoteConnections[r.provider] = {
+                label: r.account_label || undefined,
+                email: r.account_email || undefined,
+                avatar: r.account_avatar || undefined,
+                connectedAt: r.created_at || undefined,
+                hasToken: !!r.encrypted_access_token,
+              };
+            }
+          }
+        }
+
+        // Check user-scoped rows in google_oauth_accounts
+        const oauthRes = await fetch(
+          `${supabaseBase}/rest/v1/google_oauth_accounts?account_id=like.${encodeURIComponent(`user:${cleanUserId}:%`)}`,
+          { headers: this.supabaseHeaders, cache: 'no-store' }
+        );
+
+        if (oauthRes.ok) {
+          const rows = await oauthRes.json();
+          if (Array.isArray(rows)) {
+            for (const r of rows) {
+              const parts = r.account_id.split(':');
+              const provider = parts[2];
+              if (provider && !remoteConnections[provider]) {
+                remoteConnections[provider] = {
+                  label: r.name || undefined,
+                  email: r.email || undefined,
+                  avatar: r.picture || undefined,
+                  connectedAt: r.created_at || undefined,
+                  hasToken: !!r.encrypted_tokens,
+                };
+              }
+            }
+          }
+        }
+      } catch {}
     }
 
     const results: ConnectorInfo[] = [];
 
     for (const id of Object.keys(CONNECTOR_DEFINITIONS) as ConnectorId[]) {
       const def = CONNECTOR_DEFINITIONS[id];
-      const saved = config[id];
+      const saved = userMap[id];
+      const remote = remoteConnections[id];
       const isEnabled = saved?.enabled !== undefined ? saved.enabled : true;
 
       let isConnected = false;
-      let accountLabel: string | undefined = saved?.metadata?.accountLabel;
-      let accountEmail: string | undefined = saved?.metadata?.accountEmail;
-      let accountAvatar: string | undefined = saved?.metadata?.accountAvatar;
-      let lastConnectedAt: string | undefined = saved?.metadata?.connectedAt;
+      let accountLabel: string | undefined = remote?.label || saved?.metadata?.accountLabel;
+      let accountEmail: string | undefined = remote?.email || saved?.metadata?.accountEmail;
+      let accountAvatar: string | undefined = remote?.avatar || saved?.metadata?.accountAvatar;
+      let lastConnectedAt: string | undefined = remote?.connectedAt || saved?.metadata?.connectedAt;
 
       if (id === 'google_drive' || id === 'google_sheets' || id === 'google_docs' || id === 'google_calendar' || id === 'gmail') {
         isConnected = googleConnected;
@@ -356,16 +499,29 @@ class ConnectorsStore {
           accountAvatar = googleAccount.picture;
         }
       } else if (id === 'palmier') {
+        // Palmier is a local Mac machine MCP bridge
         isConnected = !!env.palmier.url;
         accountLabel = env.palmier.url ? 'Local Palmier Bridge' : undefined;
       } else {
-        const token = await this.getConnectorToken(id);
-        isConnected = !!token;
-        if (!accountLabel && isConnected) {
-          accountLabel = id === 'notion' ? 'Notion Integration'
-            : id === 'vercel' ? 'Vercel Account'
-            : id === 'github' ? 'GitHub PAT'
-            : id === 'airtop' ? 'Airtop API Active' : 'Connected';
+        if (cleanUserId) {
+          const hasRemoteToken = remote?.hasToken;
+          const hasLocalToken = !!saved?.encryptedToken;
+          isConnected = Boolean(hasRemoteToken || hasLocalToken);
+          if (isConnected && !accountLabel) {
+            accountLabel =
+              id === 'notion'
+                ? 'Notion Integration'
+                : id === 'vercel'
+                ? 'Vercel Account'
+                : id === 'github'
+                ? 'GitHub PAT'
+                : id === 'airtop'
+                ? 'Airtop API Active'
+                : 'Connected';
+          }
+        } else {
+          // Guest mode: always disconnected
+          isConnected = false;
         }
       }
 
@@ -384,10 +540,11 @@ class ConnectorsStore {
   }
 
   /**
-   * Set credentials / status for a connector.
+   * Set credentials / status for a connector scoped to a specific user.
    */
   async updateConnector(
     id: ConnectorId,
+    userId: string,
     params: {
       enabled?: boolean;
       token?: string;
@@ -398,16 +555,24 @@ class ConnectorsStore {
       };
     }
   ): Promise<void> {
+    if (!userId || !userId.trim()) {
+      throw new Error('Authentication required to configure connectors.');
+    }
+
+    const cleanUserId = userId.trim();
     const config = this.loadConfig();
-    const existing = config[id] || { enabled: true };
+    if (!config[cleanUserId]) config[cleanUserId] = {};
+    const existing = config[cleanUserId][id] || { enabled: true };
 
     if (params.enabled !== undefined) {
       existing.enabled = params.enabled;
     }
 
+    let encrypted: string | undefined;
     if (params.token !== undefined) {
       if (params.token.trim()) {
-        existing.encryptedToken = encryptPayload(params.token.trim());
+        encrypted = encryptPayload(params.token.trim());
+        existing.encryptedToken = encrypted;
       } else {
         delete existing.encryptedToken;
       }
@@ -421,33 +586,117 @@ class ConnectorsStore {
       };
     }
 
-    config[id] = existing;
+    config[cleanUserId][id] = existing;
     this.saveConfig(config);
-    logger.info('ConnectorsStore', `Updated connector ${id}`, { enabled: existing.enabled });
+
+    // Persist to Supabase if connected
+    if (this.supabaseHeaders && env.supabase.url) {
+      try {
+        const supabaseBase = env.supabase.url.replace(/\/$/, '');
+
+        // Try user_connections table
+        const connPayload = {
+          user_id: cleanUserId,
+          provider: id,
+          encrypted_access_token: encrypted || existing.encryptedToken || null,
+          account_label: existing.metadata?.accountLabel || null,
+          account_email: existing.metadata?.accountEmail || null,
+          account_avatar: existing.metadata?.accountAvatar || null,
+          updated_at: new Date().toISOString(),
+        };
+
+        const connRes = await fetch(`${supabaseBase}/rest/v1/user_connections?on_conflict=user_id,provider`, {
+          method: 'POST',
+          headers: {
+            ...this.supabaseHeaders,
+            Prefer: 'resolution=merge-duplicates',
+          },
+          body: JSON.stringify([connPayload]),
+        });
+
+        // If user_connections doesn't exist yet, save as user-scoped row in google_oauth_accounts
+        if (!connRes.ok && connRes.status === 404 && encrypted) {
+          const accountId = `user:${cleanUserId}:${id}`;
+          const oauthPayload = {
+            account_id: accountId,
+            email: existing.metadata?.accountEmail || `${id}@user.local`,
+            name: existing.metadata?.accountLabel || id,
+            picture: existing.metadata?.accountAvatar || null,
+            is_primary: false,
+            encrypted_tokens: encrypted,
+            scopes: [],
+            updated_at: new Date().toISOString(),
+          };
+
+          await fetch(`${supabaseBase}/rest/v1/google_oauth_accounts?on_conflict=account_id`, {
+            method: 'POST',
+            headers: {
+              ...this.supabaseHeaders,
+              Prefer: 'resolution=merge-duplicates',
+            },
+            body: JSON.stringify([oauthPayload]),
+          });
+        }
+      } catch (err) {
+        logger.warn('ConnectorsStore', 'Failed to persist user connector to Supabase', { error: String(err) });
+      }
+    }
+
+    logger.info('ConnectorsStore', `Updated user ${cleanUserId} connector ${id}`, { enabled: existing.enabled });
   }
 
   /**
-   * Disconnect a connector by revoking credentials.
+   * Disconnect a connector for a specific user.
    */
-  async disconnectConnector(id: ConnectorId): Promise<void> {
-    if (id === 'google_drive' || id === 'google_sheets' || id === 'google_docs' || id === 'google_calendar' || id === 'gmail') {
-      await tokenStore.deleteTokens();
+  async disconnectConnector(id: ConnectorId, userId: string): Promise<void> {
+    if (!userId || !userId.trim()) return;
+    const cleanUserId = userId.trim();
+
+    if (
+      id === 'google_drive' ||
+      id === 'google_sheets' ||
+      id === 'google_docs' ||
+      id === 'google_calendar' ||
+      id === 'gmail'
+    ) {
+      await tokenStore.deleteTokens(cleanUserId);
+      await tokenStore.deleteTokens(`user:${cleanUserId}:google`);
     }
 
+    // Delete from Supabase
+    if (this.supabaseHeaders && env.supabase.url) {
+      try {
+        const supabaseBase = env.supabase.url.replace(/\/$/, '');
+        await fetch(
+          `${supabaseBase}/rest/v1/user_connections?user_id=eq.${encodeURIComponent(cleanUserId)}&provider=eq.${encodeURIComponent(id)}`,
+          { method: 'DELETE', headers: this.supabaseHeaders }
+        );
+        await fetch(
+          `${supabaseBase}/rest/v1/google_oauth_accounts?account_id=eq.${encodeURIComponent(`user:${cleanUserId}:${id}`)}`,
+          { method: 'DELETE', headers: this.supabaseHeaders }
+        );
+      } catch {}
+    }
+
+    // Delete from local config
     const config = this.loadConfig();
-    if (config[id]) {
-      delete config[id].encryptedToken;
-      delete config[id].metadata;
-      config[id].enabled = false;
+    if (config[cleanUserId]?.[id]) {
+      delete config[cleanUserId][id].encryptedToken;
+      delete config[cleanUserId][id].metadata;
+      config[cleanUserId][id].enabled = false;
       this.saveConfig(config);
     }
-    logger.info('ConnectorsStore', `Disconnected connector ${id}`);
+
+    logger.info('ConnectorsStore', `Disconnected connector ${id} for user ${cleanUserId}`);
   }
 
   /**
-   * Live test a connector by pinging its real upstream API.
+   * Live test a connector for the active user.
    */
-  async testConnector(id: ConnectorId): Promise<{
+  async testConnector(
+    id: ConnectorId,
+    userId?: string | null
+  ): Promise<{
     success: boolean;
     latencyMs: number;
     message: string;
@@ -455,13 +704,21 @@ class ConnectorsStore {
   }> {
     const start = Date.now();
 
+    if (!userId && id !== 'palmier') {
+      return {
+        success: false,
+        latencyMs: 0,
+        message: 'You are not logged in. Please sign in to connect and test personal connectors.',
+      };
+    }
+
     try {
       switch (id) {
         case 'google_drive':
         case 'google_sheets':
         case 'google_docs':
         case 'gmail': {
-          const tokens = await tokenStore.getTokens();
+          const tokens = await tokenStore.getTokens(userId || undefined);
           if (!tokens?.access_token && !tokens?.refresh_token) {
             return {
               success: false,
@@ -478,9 +735,9 @@ class ConnectorsStore {
         }
 
         case 'vercel': {
-          const token = await this.getConnectorToken('vercel');
+          const token = await this.getConnectorToken('vercel', userId);
           if (!token) {
-            return { success: false, latencyMs: Date.now() - start, message: 'No Vercel API token configured' };
+            return { success: false, latencyMs: Date.now() - start, message: 'No Vercel API token configured for your account' };
           }
           const res = await fetch('https://api.vercel.com/v2/user', {
             headers: { Authorization: `Bearer ${token}` },
@@ -499,9 +756,9 @@ class ConnectorsStore {
         }
 
         case 'notion': {
-          const token = await this.getConnectorToken('notion');
+          const token = await this.getConnectorToken('notion', userId);
           if (!token) {
-            return { success: false, latencyMs: Date.now() - start, message: 'No Notion API token configured' };
+            return { success: false, latencyMs: Date.now() - start, message: 'No Notion API token configured for your account' };
           }
           const res = await fetch('https://api.notion.com/v1/users/me', {
             headers: {
@@ -523,9 +780,9 @@ class ConnectorsStore {
         }
 
         case 'github': {
-          const token = await this.getConnectorToken('github');
+          const token = await this.getConnectorToken('github', userId);
           if (!token) {
-            return { success: false, latencyMs: Date.now() - start, message: 'No GitHub Personal Access Token configured' };
+            return { success: false, latencyMs: Date.now() - start, message: 'No GitHub Personal Access Token configured for your account' };
           }
           const res = await fetch('https://api.github.com/user', {
             headers: {
@@ -548,10 +805,10 @@ class ConnectorsStore {
         }
 
         case 'airtop': {
-          const apiKey = await this.getConnectorToken('airtop');
+          const apiKey = await this.getConnectorToken('airtop', userId);
           const latencyMs = Date.now() - start;
           if (!apiKey) {
-            return { success: false, latencyMs, message: 'No Airtop API key configured' };
+            return { success: false, latencyMs, message: 'No Airtop API key configured for your account' };
           }
           return {
             success: true,

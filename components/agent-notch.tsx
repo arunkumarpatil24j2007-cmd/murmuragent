@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 export type AgentNotchState =
   | 'IDLE'
-  | 'LISTENING'
-  | 'TRANSCRIBING'
-  | 'PROCESSING'
-  | 'WORKING'
+  | 'MIC_LISTENING'
+  | 'MIC_TRANSCRIBING'
+  | 'AGENT_LISTENING'
+  | 'AGENT_WORKING'
+  | 'AGENT_PERMISSION'
   | 'SUCCESS'
   | 'ERROR';
 
@@ -19,6 +20,7 @@ export interface ActionCardData {
   subject?: string;
   preview?: string;
   actionButtonText?: string;
+  url?: string;
   onConfirm?: () => void;
 }
 
@@ -34,16 +36,34 @@ export interface AgentNotchProps {
   onClick?: () => void;
 }
 
-// Default action card matching reference Image 4
-const DEFAULT_EMAIL_ACTION: ActionCardData = {
-  type: 'email',
-  serviceIcon: 'gmail',
-  title: 'New Message',
-  to: 'david@company.com',
-  subject: 'Project update and Thursday sync',
-  preview: 'Hi David,\n\nThe designs look great. Let\'s sync Thursday.\n\nBest',
-  actionButtonText: 'Send',
-};
+/**
+ * Inserts transcribed text into currently focused element or copies to clipboard
+ */
+function insertTextAtActiveElement(text: string): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.activeElement as HTMLElement | null;
+
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+    const input = el as HTMLInputElement | HTMLTextAreaElement;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    const before = input.value.substring(0, start);
+    const after = input.value.substring(end);
+    input.value = before + text + after;
+    input.selectionStart = input.selectionEnd = start + text.length;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  } else if (el && el.isContentEditable) {
+    document.execCommand('insertText', false, text);
+    return true;
+  } else {
+    // Fallback copy to clipboard
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+    return false;
+  }
+}
 
 export function AgentNotch({
   state: controlledState,
@@ -56,20 +76,62 @@ export function AgentNotch({
   onCancel,
   onClick,
 }: AgentNotchProps) {
-  // Internal state when not externally controlled
   const [internalState, setInternalState] = useState<AgentNotchState>('IDLE');
   const [isHovered, setIsHovered] = useState(false);
-  const [demoAction, setDemoAction] = useState<ActionCardData>(DEFAULT_EMAIL_ACTION);
+  const [isMicHovered, setIsMicHovered] = useState(false);
+  const [isAgentHovered, setIsAgentHovered] = useState(false);
+
+  // Audio / Speech Recognition
+  const [speechText, setSpeechText] = useState('');
+  const [audioLevel, setAudioLevel] = useState(0.3);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [agentInputPrompt, setAgentInputPrompt] = useState('');
+  const [showPromptInput, setShowPromptInput] = useState(false);
+
+  // Live Agent Orchestration State
+  const [currentTool, setCurrentTool] = useState<string | null>(null);
+  const [stepDetail, setStepDetail] = useState<string>('Analyzing task...');
+  const [pendingPermission, setPendingPermission] = useState<{
+    toolCallId: string;
+    tool: string;
+    action: string;
+  } | null>(null);
+  const [completedURL, setCompletedURL] = useState<string | null>(null);
+  const [completedTitle, setCompletedTitle] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('');
 
   const currentState = controlledState || internalState;
+  const recognitionRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const updateState = (newState: AgentNotchState) => {
-    if (onStateChange) {
-      onStateChange(newState);
+  const updateState = useCallback(
+    (newState: AgentNotchState) => {
+      if (onStateChange) {
+        onStateChange(newState);
+      } else {
+        setInternalState(newState);
+      }
+    },
+    [onStateChange]
+  );
+
+  // Timer for duration counter in listening states
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (currentState === 'MIC_LISTENING' || currentState === 'AGENT_LISTENING') {
+      setRecordingSeconds(0);
+      interval = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+        setAudioLevel(0.2 + Math.random() * 0.7);
+      }, 100);
     } else {
-      setInternalState(newState);
+      setRecordingSeconds(0);
     }
-  };
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentState]);
 
   // Auto-dismiss timers for SUCCESS and ERROR states
   useEffect(() => {
@@ -77,118 +139,242 @@ export function AgentNotch({
     if (currentState === 'SUCCESS') {
       timer = setTimeout(() => {
         updateState('IDLE');
-      }, 1500);
+      }, completedURL ? 6000 : 2500);
     } else if (currentState === 'ERROR') {
       timer = setTimeout(() => {
         updateState('IDLE');
-      }, 3000);
+      }, 4000);
     }
     return () => clearTimeout(timer);
-  }, [currentState]);
+  }, [currentState, completedURL, updateState]);
 
-  // Global shortcut to toggle notch demo / activate
+  // Clean up recognition / abort controllers on unmount
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // ⌥ + N to cycle state for demonstration
-      if (e.altKey && (e.key === 'n' || e.key === 'N')) {
-        e.preventDefault();
-        const states: AgentNotchState[] = [
-          'IDLE',
-          'LISTENING',
-          'TRANSCRIBING',
-          'PROCESSING',
-          'WORKING',
-          'SUCCESS',
-          'ERROR',
-        ];
-        const nextIdx = (states.indexOf(currentState) + 1) % states.length;
-        updateState(states[nextIdx]);
-      } else if (e.key === 'Escape' && currentState !== 'IDLE') {
-        updateState('IDLE');
-        onCancel?.();
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentState]);
+  }, []);
 
-  const activeAction = externalActionDetails || demoAction;
+  // -------------------------------------------------------------
+  // 1. MIC MODE: Speech-to-Text Implementation
+  // -------------------------------------------------------------
+  const startMicMode = () => {
+    updateState('MIC_LISTENING');
+    setSpeechText('');
+    setStatusMessage('');
 
-  // Render authentic 3D Glossy Earth Globe (exact match to Image 3 & 4)
-  const renderGlobeIcon = () => (
-    <div
-      style={{
-        width: '20px',
-        height: '20px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle at 35% 35%, #93C5FD 0%, #3B82F6 45%, #1D4ED8 80%, #1E3A8A 100%)',
-        position: 'relative',
-        boxShadow: '0 0 8px rgba(59, 130, 246, 0.4), inset -1px -1px 3px rgba(0, 0, 0, 0.6), inset 1px 1px 2px rgba(255, 255, 255, 0.7)',
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}
-      className="animate-globe-glow"
-      title="Murmur System Agent"
-    >
-      {/* Cloud swirl overlay */}
-      <svg
-        viewBox="0 0 20 20"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          opacity: 0.85,
-        }}
-      >
-        <path
-          d="M 4 8 Q 8 6 12 7 Q 15 8 17 6 Q 16 11 11 11 Q 7 12 4 8 Z"
-          fill="#FFFFFF"
-          opacity="0.85"
-        />
-        <path
-          d="M 2 13 Q 6 10 9 14 Q 13 15 15 13 Q 13 17 8 16 Q 4 16 2 13 Z"
-          fill="#FFFFFF"
-          opacity="0.75"
-        />
-      </svg>
-      {/* Gloss specular reflection */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '2px',
-          left: '3px',
-          width: '7px',
-          height: '4px',
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse at center, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%)',
-          transform: 'rotate(-25deg)',
-        }}
-      />
-    </div>
-  );
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRec) {
+      try {
+        const rec = new SpeechRec();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = 'en-US';
 
-  // Width & height transitions based on state
-  const getDimensions = () => {
-    switch (currentState) {
-      case 'IDLE':
-        return { width: isHovered ? '208px' : '196px', minHeight: '34px', padding: '0 14px' };
-      case 'LISTENING':
-        return { width: '330px', minHeight: '48px', padding: '0 16px' };
-      case 'TRANSCRIBING':
-        return { width: '310px', minHeight: '48px', padding: '0 16px' };
-      case 'PROCESSING':
-        return { width: '270px', minHeight: '46px', padding: '0 16px' };
-      case 'WORKING':
-        return { width: '420px', minHeight: '280px', padding: '16px 20px 18px 20px' };
-      case 'SUCCESS':
-        return { width: '240px', minHeight: '44px', padding: '0 16px' };
-      case 'ERROR':
-        return { width: '350px', minHeight: '46px', padding: '0 16px' };
+        rec.onresult = (event: any) => {
+          let current = '';
+          for (let i = 0; i < event.results.length; i++) {
+            current += event.results[i][0].transcript;
+          }
+          setSpeechText(current);
+        };
+
+        rec.onerror = (e: any) => {
+          console.warn('Speech recognition warning:', e);
+        };
+
+        rec.start();
+        recognitionRef.current = rec;
+      } catch (err) {
+        console.warn('Could not start webkitSpeechRecognition:', err);
+      }
     }
   };
 
-  const dim = getDimensions();
+  const stopMicModeAndInsert = () => {
+    updateState('MIC_TRANSCRIBING');
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+
+    setTimeout(() => {
+      const textToUse = speechText.trim() || externalTranscript || 'Dictated text inserted successfully.';
+      const wasInserted = insertTextAtActiveElement(textToUse);
+      setStatusMessage(wasInserted ? `Inserted: "${textToUse.slice(0, 30)}..."` : 'Transcribed & copied to clipboard');
+      updateState('SUCCESS');
+    }, 600);
+  };
+
+  // -------------------------------------------------------------
+  // 2. AGENT MODE: Autonomous Orchestration & SSE Execution
+  // -------------------------------------------------------------
+  const startAgentMode = () => {
+    setShowPromptInput(true);
+    updateState('AGENT_LISTENING');
+    setSpeechText('');
+  };
+
+  const submitAgentPrompt = async (promptToRun: string) => {
+    if (!promptToRun.trim()) return;
+    setShowPromptInput(false);
+    updateState('AGENT_WORKING');
+    setCurrentTool(null);
+    setStepDetail('Analyzing task...');
+    setCompletedURL(null);
+    setCompletedTitle(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({
+          message: promptToRun,
+          conversationId: `notch-${Date.now()}`,
+          model: 'auto',
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Server returned HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+
+          try {
+            const event = JSON.parse(jsonStr);
+            const { type, data } = event;
+
+            if (type === 'agent_thinking') {
+              setStepDetail(data?.status || data?.text || 'Thinking...');
+            } else if (type === 'tool_started') {
+              setCurrentTool(data?.tool || 'action');
+              setStepDetail(data?.action || data?.title || `Running ${data?.tool}`);
+            } else if (type === 'tool_result') {
+              setStepDetail(data?.title || data?.result || `${data?.tool} completed`);
+              if (data?.url) {
+                setCompletedURL(data.url);
+                setCompletedTitle(data?.title || 'Open Result');
+              }
+            } else if (type === 'permission_required') {
+              setPendingPermission({
+                toolCallId: data.toolCallId || '',
+                tool: data.tool || 'tool',
+                action: data.action || data.text || 'Confirm execution',
+              });
+              updateState('AGENT_PERMISSION');
+            } else if (type === 'final_response' || type === 'agent_completed') {
+              setStatusMessage(data?.content?.slice(0, 48) || 'Task completed successfully');
+              updateState('SUCCESS');
+            } else if (type === 'agent_error') {
+              setStatusMessage(data?.error || 'Execution encountered an error');
+              updateState('ERROR');
+            }
+          } catch {}
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setStatusMessage(err.message || 'Failed to connect to agent');
+        updateState('ERROR');
+      }
+    }
+  };
+
+  const handleRespondPermission = async (allowed: boolean) => {
+    if (!pendingPermission?.toolCallId) {
+      updateState('AGENT_WORKING');
+      return;
+    }
+
+    const { toolCallId } = pendingPermission;
+    setPendingPermission(null);
+    updateState('AGENT_WORKING');
+    setStepDetail(allowed ? 'Permission granted. Proceeding...' : 'Action cancelled by user.');
+
+    try {
+      await fetch('/api/agent/permission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolCallId, allowed }),
+      });
+    } catch (err) {
+      console.error('Error responding to permission:', err);
+    }
+  };
+
+  const cancelExecution = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+    updateState('IDLE');
+    onCancel?.();
+  };
+
+  // -------------------------------------------------------------
+  // Dynamic Widths (Single continuous horizontal extension)
+  // -------------------------------------------------------------
+  const getWidth = () => {
+    switch (currentState) {
+      case 'IDLE':
+        return isHovered ? 290 : 270;
+      case 'MIC_LISTENING':
+        return 380;
+      case 'MIC_TRANSCRIBING':
+        return 320;
+      case 'AGENT_LISTENING':
+        return showPromptInput ? 440 : 380;
+      case 'AGENT_WORKING':
+        return 460;
+      case 'AGENT_PERMISSION':
+        return 490;
+      case 'SUCCESS':
+        return completedURL ? 420 : 330;
+      case 'ERROR':
+        return 360;
+      default:
+        return 270;
+    }
+  };
+
+  const currentWidth = getWidth();
 
   return (
     <aside
@@ -205,92 +391,61 @@ export function AgentNotch({
         pointerEvents: 'none',
       }}
     >
-      {/* The Central Notch Surface (Directly under top bezel) */}
       <div
         style={{
           position: 'relative',
-          top: 'env(safe-area-inset-top, 0px)',
+          top: 0,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           pointerEvents: 'auto',
         }}
       >
-        {/* Left Notch Ear Fillet (Seamless outward corner curve to top bezel) */}
+        {/* Left Notch Ear Fillet Curve */}
         <svg
           width="12"
           height="12"
           viewBox="0 0 12 12"
           fill="none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: '-12px',
-            pointerEvents: 'none',
-          }}
+          style={{ position: 'absolute', top: 0, left: '-12px', pointerEvents: 'none' }}
         >
-          <path
-            d="M 12 0 C 4 0 0 6 0 12 L 12 12 Z"
-            fill="#050506"
-          />
+          <path d="M 12 0 C 4 0 0 6 0 12 L 12 12 Z" fill="#000000" />
         </svg>
 
-        {/* Right Notch Ear Fillet (Seamless outward corner curve to top bezel) */}
+        {/* Right Notch Ear Fillet Curve */}
         <svg
           width="12"
           height="12"
           viewBox="0 0 12 12"
           fill="none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: '-12px',
-            pointerEvents: 'none',
-          }}
+          style={{ position: 'absolute', top: 0, right: '-12px', pointerEvents: 'none' }}
         >
-          <path
-            d="M 0 0 C 8 0 12 6 12 12 L 0 12 Z"
-            fill="#050506"
-          />
+          <path d="M 0 0 C 8 0 12 6 12 12 L 0 12 Z" fill="#000000" />
         </svg>
 
-        {/* Main Expanding Dynamic Island Notch Body */}
+        {/* The Murmur Notch Bar (Continuous Solid Surface) */}
         <div
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          onClick={() => {
-            if (currentState === 'IDLE') {
-              updateState('LISTENING');
-              onClick?.();
-            }
-          }}
           style={{
-            width: dim.width,
-            minHeight: dim.minHeight,
-            padding: dim.padding,
-            backgroundColor: '#050506',
-            backgroundImage: 'linear-gradient(180deg, rgba(20, 20, 24, 0.4) 0%, rgba(5, 5, 6, 0.95) 100%)',
-            borderBottomLeftRadius: currentState === 'WORKING' ? '24px' : '16px',
-            borderBottomRightRadius: currentState === 'WORKING' ? '24px' : '16px',
+            width: `${currentWidth}px`,
+            height: '32px',
+            backgroundColor: '#000000',
+            borderBottomLeftRadius: '11px',
+            borderBottomRightRadius: '11px',
             borderTopLeftRadius: 0,
             borderTopRightRadius: 0,
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderTop: 'none',
-            boxShadow: currentState === 'IDLE'
-              ? '0 4px 14px rgba(0, 0, 0, 0.4)'
-              : '0 24px 60px rgba(0, 0, 0, 0.7), 0 6px 18px rgba(0, 0, 0, 0.5)',
             display: 'flex',
-            flexDirection: currentState === 'WORKING' ? 'column' : 'row',
-            alignItems: currentState === 'WORKING' ? 'stretch' : 'center',
-            justifyContent: currentState === 'IDLE' ? 'space-between' : 'flex-start',
-            cursor: currentState === 'IDLE' ? 'pointer' : 'default',
+            alignItems: 'center',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.45)',
             userSelect: 'none',
             overflow: 'hidden',
+            transition: 'width 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+            padding: '0 12px',
           }}
-          className="notch-spring"
         >
           {/* ==================================================================== */}
-          {/* 1. IDLE STATE: Authentic MacBook Notch + Globe on Left */}
+          {/* 1. IDLE STATE: Dual Wing Controls + Camera Clearance                */}
           {/* ==================================================================== */}
           {currentState === 'IDLE' && (
             <div
@@ -299,63 +454,95 @@ export function AgentNotch({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                height: '34px',
+                height: '100%',
               }}
             >
-              {/* Globe on left notch wing (Image 3) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {renderGlobeIcon()}
-              </div>
+              {/* Left Wing: Speech-To-Text Dictation Mic Button */}
+              <button
+                type="button"
+                onClick={startMicMode}
+                onMouseEnter={() => setIsMicHovered(true)}
+                onMouseLeave={() => setIsMicHovered(false)}
+                title="Mic Mode: Dictate text to insert into active input"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px 6px',
+                  borderRadius: '4px',
+                  transition: 'transform 0.15s ease, opacity 0.15s ease',
+                  transform: isMicHovered ? 'scale(1.1)' : 'scale(1.0)',
+                  opacity: isMicHovered ? 0.95 : 0.55,
+                }}
+              >
+                <svg width="12" height="13" viewBox="0 0 16 16" fill="#FFFFFF">
+                  <path d="M8 10c1.66 0 3-1.34 3-3V3c0-1.66-1.34-3-3-3S5 1.34 5 3v4c0 1.66 1.34 3 3 3z" />
+                  <path d="M12.5 7c0 2.48-2.02 4.5-4.5 4.5S3.5 9.48 3.5 7H2c0 3.03 2.25 5.54 5.17 5.92V15h1.66v-2.08C11.75 12.54 14 10.03 14 7h-1.5z" />
+                </svg>
+              </button>
 
-              {/* Hardware camera pinhole & green/amber privacy indicator */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                {/* Hardware camera lens reflection */}
+              {/* Center: MacBook Camera & Sensor Hardware Clearance Zone */}
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                {/* Hardware Camera lens reflection */}
                 <div
                   style={{
-                    width: '9px',
-                    height: '9px',
+                    width: '8px',
+                    height: '8px',
                     borderRadius: '50%',
-                    backgroundColor: '#0F1115',
+                    backgroundColor: '#0A0C10',
                     border: '1px solid rgba(255, 255, 255, 0.12)',
-                    boxShadow: 'inset 0 0 2px rgba(0, 0, 0, 0.9)',
                   }}
                 />
-                {/* Subtle activity dot */}
+                {/* Subtle indicator light */}
                 <div
                   style={{
-                    width: '5px',
-                    height: '5px',
+                    width: '4px',
+                    height: '4px',
                     borderRadius: '50%',
-                    backgroundColor: isHovered ? '#38BDF8' : 'rgba(255, 255, 255, 0.25)',
+                    backgroundColor: isHovered ? 'rgba(56, 189, 248, 0.6)' : 'transparent',
                     transition: 'background-color 0.2s ease',
                   }}
                 />
               </div>
-            </div>
-          )}
 
-          {/* ==================================================================== */}
-          {/* 2. LISTENING STATE: Voice Waveform + Red Pulse + Stop button (Image 1) */}
-          {/* ==================================================================== */}
-          {currentState === 'LISTENING' && (
-            <div
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                height: '48px',
-                gap: '12px',
-              }}
-            >
-              {/* Left: Red recording pulse ring */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Right Wing: Circular Agent Trigger Button */}
+              <button
+                type="button"
+                onClick={startAgentMode}
+                onMouseEnter={() => setIsAgentHovered(true)}
+                onMouseLeave={() => setIsAgentHovered(false)}
+                title="Agent Mode: Orchestrate autonomous tools"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px 6px',
+                  borderRadius: '4px',
+                  transition: 'transform 0.15s ease',
+                  transform: isAgentHovered ? 'scale(1.12)' : 'scale(1.0)',
+                }}
+              >
                 <div
                   style={{
-                    width: '20px',
-                    height: '20px',
+                    width: '14px',
+                    height: '14px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    border: `1px solid ${isAgentHovered ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.22)'}`,
+                    backgroundColor: isAgentHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -363,305 +550,334 @@ export function AgentNotch({
                 >
                   <div
                     style={{
-                      width: '10px',
-                      height: '10px',
+                      width: '4px',
+                      height: '4px',
                       borderRadius: '50%',
-                      backgroundColor: '#EF4444',
+                      backgroundColor: isAgentHovered ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
                     }}
-                    className="animate-record-pulse"
                   />
                 </div>
-
-                {/* Animated 4-bar audio waveform */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', height: '16px' }}>
-                  <span style={{ width: '3px', backgroundColor: '#FFFFFF', borderRadius: '2px', animation: 'waveBar 0.9s infinite ease-in-out', animationDelay: '0.1s' }} />
-                  <span style={{ width: '3px', backgroundColor: '#FFFFFF', borderRadius: '2px', animation: 'waveBar 1.2s infinite ease-in-out', animationDelay: '0.3s' }} />
-                  <span style={{ width: '3px', backgroundColor: '#FFFFFF', borderRadius: '2px', animation: 'waveBar 0.8s infinite ease-in-out', animationDelay: '0.5s' }} />
-                  <span style={{ width: '3px', backgroundColor: '#FFFFFF', borderRadius: '2px', animation: 'waveBar 1.1s infinite ease-in-out', animationDelay: '0.2s' }} />
-                </div>
-              </div>
-
-              {/* Center: "Listening..." / Live speech transcript */}
-              <div
-                style={{
-                  flex: 1,
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#FFFFFF',
-                  letterSpacing: '-0.01em',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {externalTranscript || externalMessage || 'Listening…'}
-              </div>
-
-              {/* Right: Rounded Stop Recording Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateState('WORKING');
-                }}
-                style={{
-                  width: '26px',
-                  height: '26px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.22)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)'}
-                title="Stop listening and execute"
-              >
-                <div
-                  style={{
-                    width: '9px',
-                    height: '9px',
-                    borderRadius: '2px',
-                    backgroundColor: '#FFFFFF',
-                  }}
-                />
               </button>
             </div>
           )}
 
           {/* ==================================================================== */}
-          {/* 3. TRANSCRIBING STATE */}
+          {/* 2. MIC LISTENING STATE: Audio Waveform + Active Speech               */}
           {/* ==================================================================== */}
-          {currentState === 'TRANSCRIBING' && (
+          {currentState === 'MIC_LISTENING' && (
             <div
               style={{
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                height: '48px',
+                height: '100%',
                 gap: '10px',
+              }}
+            >
+              {/* Equalizer bars + mic icon */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="#EF4444">
+                  <path d="M8 10c1.66 0 3-1.34 3-3V3c0-1.66-1.34-3-3-3S5 1.34 5 3v4c0 1.66 1.34 3 3 3z" />
+                  <path d="M12.5 7c0 2.48-2.02 4.5-4.5 4.5S3.5 9.48 3.5 7H2c0 3.03 2.25 5.54 5.17 5.92V15h1.66v-2.08C11.75 12.54 14 10.03 14 7h-1.5z" />
+                </svg>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', height: '14px' }}>
+                  {[12, 18, 14, 16].map((baseH, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: '2px',
+                        height: `${Math.min(18, Math.max(5, baseH * audioLevel))}px`,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '1px',
+                        transition: 'height 0.08s ease',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Status / Live text */}
+              <div
+                style={{
+                  flex: 1,
+                  fontSize: '11.5px',
+                  color: '#FFFFFF',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'tail',
+                }}
+              >
+                {speechText || 'Listening… speak to transcribe'}
+              </div>
+
+              {/* Stop Button */}
+              <button
+                type="button"
+                onClick={stopMicModeAndInsert}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '2px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
+                <span style={{ fontSize: '10px', color: '#FFFFFF', fontWeight: 600 }}>Stop</span>
+              </button>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* 3. MIC TRANSCRIBING STATE                                            */}
+          {/* ==================================================================== */}
+          {currentState === 'MIC_TRANSCRIBING' && (
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: '100%',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div
                   style={{
-                    width: '12px',
-                    height: '12px',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    borderTopColor: '#38BDF8',
+                    width: '7px',
+                    height: '7px',
                     borderRadius: '50%',
-                    animation: 'spin 0.8s linear infinite',
+                    backgroundColor: '#38BDF8',
+                    boxShadow: '0 0 6px #38BDF8',
                   }}
                 />
-                <span style={{ fontSize: '13px', fontWeight: '500', color: '#E2E8F0' }}>
-                  {externalMessage || 'Transcribing speech…'}
+                <span style={{ fontSize: '11.5px', color: '#FFFFFF', fontWeight: 600 }}>
+                  Transcribing & inserting…
                 </span>
               </div>
             </div>
           )}
 
           {/* ==================================================================== */}
-          {/* 4. PROCESSING STATE */}
+          {/* 4. AGENT LISTENING / PROMPT INPUT STATE                             */}
           {/* ==================================================================== */}
-          {currentState === 'PROCESSING' && (
+          {currentState === 'AGENT_LISTENING' && (
             <div
               style={{
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                height: '46px',
-                gap: '10px',
+                justifyContent: 'space-between',
+                height: '100%',
+                gap: '8px',
               }}
             >
-              <div
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '12px' }}>✨</span>
+              </div>
+
+              {showPromptInput ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitAgentPrompt(agentInputPrompt);
+                  }}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Enter agent task or ask Murmur..."
+                    value={agentInputPrompt}
+                    onChange={(e) => setAgentInputPrompt(e.target.value)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                      border: '1px solid rgba(255, 255, 255, 0.16)',
+                      borderRadius: '4px',
+                      padding: '2px 8px',
+                      fontSize: '11px',
+                      color: '#FFFFFF',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    style={{
+                      backgroundColor: '#9333EA',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '2px 8px',
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Run
+                  </button>
+                </form>
+              ) : (
+                <div style={{ flex: 1, fontSize: '11.5px', color: '#FFFFFF' }}>Listening for command…</div>
+              )}
+
+              <button
+                type="button"
+                onClick={cancelExecution}
                 style={{
-                  width: '14px',
-                  height: '14px',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  borderTopColor: '#60A5FA',
-                  borderRadius: '50%',
-                  animation: 'spin 0.7s linear infinite',
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  fontSize: '11px',
                 }}
-              />
-              <span style={{ fontSize: '13px', fontWeight: '500', color: '#F1F5F9' }}>
-                {externalMessage || 'Murmur is thinking…'}
-              </span>
+              >
+                ✕
+              </button>
             </div>
           )}
 
           {/* ==================================================================== */}
-          {/* 5. WORKING / AGENTIC ACTION CARD (Matching Image 4) */}
+          {/* 5. AGENT WORKING STATE: Tool Badge + Live Step Status                */}
           {/* ==================================================================== */}
-          {currentState === 'WORKING' && (
+          {currentState === 'AGENT_WORKING' && (
             <div
               style={{
                 width: '100%',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: '100%',
+                gap: '8px',
               }}
             >
-              {/* Notch Top Bar: Globe on left + dismiss/collapse on right */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingBottom: '2px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {renderGlobeIcon()}
-                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#94A3B8', letterSpacing: '0.02em' }}>
-                    ● Murmur Agent
-                  </span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                <span style={{ fontSize: '11px' }}>⚙️</span>
 
-                <button
-                  onClick={() => updateState('IDLE')}
+                {currentTool && (
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: '#FFFFFF',
+                      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      padding: '1px 5px',
+                      borderRadius: '3px',
+                      letterSpacing: '0.04em',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {currentTool.toUpperCase()}
+                  </span>
+                )}
+
+                <span
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    padding: '2px',
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.95)',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = '#FFFFFF'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)'}
-                  title="Collapse notch"
                 >
-                  ✕
-                </button>
+                  {stepDetail}
+                </span>
               </div>
 
-              {/* Embedded Native Action Card (Exact match to Image 4) */}
-              <div
+              <button
+                type="button"
+                onClick={cancelExecution}
+                title="Cancel Task"
                 style={{
-                  backgroundColor: '#1E1E22',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  padding: '14px 16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  padding: '2px',
                 }}
               >
-                {/* Header: Service Icon + Title */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {/* Gmail Icon */}
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4Z"
-                      fill="#EA4335"
-                    />
-                    <path
-                      d="M2 6L12 13L22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z"
-                      fill="#FBBC04"
-                      opacity="0.2"
-                    />
-                    <path
-                      d="M12 13L2 6V18H4V8L12 13.5L20 8V18H22V6L12 13Z"
-                      fill="#FFFFFF"
-                    />
-                  </svg>
-                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#FFFFFF' }}>
-                    {activeAction.title || 'New Message'}
-                  </span>
-                </div>
+                ✕
+              </button>
+            </div>
+          )}
 
-                {/* Recipient line with chip */}
-                {activeAction.to && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      paddingBottom: '8px',
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                    }}
-                  >
-                    <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '500' }}>To</span>
-                    <span
-                      style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        color: '#E2E8F0',
-                        fontSize: '11px',
-                        padding: '3px 10px',
-                        borderRadius: '20px',
-                        fontWeight: '500',
-                      }}
-                    >
-                      {activeAction.to}
-                    </span>
-                  </div>
-                )}
+          {/* ==================================================================== */}
+          {/* 6. AGENT PERMISSION CHECKPOINT: Allow & Deny Buttons                 */}
+          {/* ==================================================================== */}
+          {currentState === 'AGENT_PERMISSION' && (
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: '100%',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                <span style={{ color: '#F59E0B', fontSize: '11px' }}>🛡️</span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: '#FFFFFF',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {pendingPermission?.action || 'Confirm action'}
+                </span>
+              </div>
 
-                {/* Subject line */}
-                {activeAction.subject && (
-                  <div
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: '#F8FAFC',
-                      paddingBottom: '4px',
-                    }}
-                  >
-                    {activeAction.subject}
-                  </div>
-                )}
-
-                {/* Body Preview */}
-                {activeAction.preview && (
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      lineHeight: '1.5',
-                      color: '#CBD5E1',
-                      whiteSpace: 'pre-line',
-                      minHeight: '52px',
-                    }}
-                  >
-                    {activeAction.preview}
-                  </div>
-                )}
-
-                {/* Action Button: macOS Accent Blue Pill (Matching Image 4) */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onActionConfirm?.();
-                      updateState('SUCCESS');
-                    }}
-                    style={{
-                      backgroundColor: '#2563EB',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      padding: '7px 22px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 8px rgba(37, 99, 235, 0.35)',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#2563EB'}
-                  >
-                    {activeAction.actionButtonText || 'Send'}
-                  </button>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => handleRespondPermission(true)}
+                  style={{
+                    backgroundColor: '#10B981',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Allow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRespondPermission(false)}
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+                    color: 'rgba(255, 255, 255, 0.85)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '2px 7px',
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Deny
+                </button>
               </div>
             </div>
           )}
 
           {/* ==================================================================== */}
-          {/* 6. SUCCESS STATE: Done Confirmation */}
+          {/* 7. SUCCESS STATE: Checkmark + Link                                  */}
           {/* ==================================================================== */}
           {currentState === 'SUCCESS' && (
             <div
@@ -669,35 +885,86 @@ export function AgentNotch({
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                height: '44px',
+                justifyContent: 'space-between',
+                height: '100%',
                 gap: '8px',
               }}
             >
-              <div
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10B981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#FFFFFF',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}
+                >
+                  ✓
+                </div>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: '#FFFFFF',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {statusMessage || 'Completed'}
+                </span>
+              </div>
+
+              {completedURL && (
+                <a
+                  href={completedURL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+                    color: '#FFFFFF',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span>{completedTitle || 'Open'}</span>
+                  <span>↗</span>
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() => updateState('IDLE')}
                 style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  backgroundColor: '#10B981',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#FFFFFF',
-                  fontSize: '11px',
-                  fontWeight: '700',
+                  background: 'none',
+                  border: 'none',
+                  color: '#10B981',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
                 }}
               >
-                ✓
-              </div>
-              <span style={{ fontSize: '13px', fontWeight: '600', color: '#FFFFFF' }}>
-                {externalMessage || 'Done'}
-              </span>
+                Done
+              </button>
             </div>
           )}
 
           {/* ==================================================================== */}
-          {/* 7. ERROR STATE: Calm restrained error (Matching Image 2) */}
+          {/* 8. ERROR STATE                                                      */}
           {/* ==================================================================== */}
           {currentState === 'ERROR' && (
             <div
@@ -706,32 +973,36 @@ export function AgentNotch({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                height: '46px',
-                gap: '10px',
+                height: '100%',
+                gap: '8px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: '#F59E0B', fontSize: '15px' }}>⚠️</span>
-                <span style={{ fontSize: '12px', fontWeight: '500', color: '#F1F5F9' }}>
-                  {externalMessage || 'No speech detected. Please try again.'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                <span style={{ color: '#EF4444', fontSize: '11px' }}>⚠️</span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.95)',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {statusMessage || 'An error occurred'}
                 </span>
               </div>
 
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateState('IDLE');
-                }}
+                type="button"
+                onClick={() => updateState('IDLE')}
                 style={{
                   background: 'none',
                   border: 'none',
                   color: 'rgba(255, 255, 255, 0.6)',
                   cursor: 'pointer',
-                  fontSize: '13px',
-                  padding: '4px',
+                  fontSize: '11px',
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.color = '#FFFFFF'}
-                onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
               >
                 ✕
               </button>

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 
-export type NavTab = 'agent' | 'connectors' | 'insights' | 'tools';
+export type NavTab = 'agent' | 'connectors' | 'insights' | 'tools' | 'users';
 
 export interface HistoryItem {
   id: string;
@@ -22,6 +22,9 @@ interface SidebarProps {
   onSelectConversation?: (id: string) => void;
   onDeleteConversation?: (id: string) => void;
   connectorsCount?: number;
+  usersCount?: number;
+  currentUser?: { name?: string; email?: string; picture?: string | null } | null;
+  onOpenLogin?: () => void;
   isProcessing?: boolean;
 }
 
@@ -40,6 +43,9 @@ export function Sidebar({
   onSelectConversation,
   onDeleteConversation,
   connectorsCount = 5,
+  usersCount = 0,
+  currentUser = null,
+  onOpenLogin,
   isProcessing = false,
 }: SidebarProps) {
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
@@ -237,6 +243,19 @@ export function Sidebar({
                   <rect x="14" y="3" width="7" height="7" rx="1.5" />
                   <rect x="14" y="14" width="7" height="7" rx="1.5" />
                   <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              ),
+            },
+            {
+              tab: 'users' as NavTab,
+              label: 'Users Directory',
+              badge: usersCount > 0 ? usersCount : undefined,
+              icon: (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               ),
             },
@@ -563,47 +582,143 @@ export function Sidebar({
           <span>Settings</span>
         </button>
 
-        {/* User profile row */}
-        <div
-          onClick={onOpenSettings}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '9px',
-            padding: '6px 8px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'background-color 0.12s ease',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--murmur-sidebar-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-        >
+        {/* User profile row or Sign in with Google */}
+        {currentUser && currentUser.email ? (
           <div
+            onClick={onOpenSettings}
+            title={`${currentUser.name || currentUser.email} (${currentUser.email}) - Settings`}
             style={{
-              width: '24px',
-              height: '24px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--murmur-plum)',
-              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 8px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'background-color 0.12s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--murmur-sidebar-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+              {currentUser.picture ? (
+                <img
+                  src={currentUser.picture}
+                  alt={currentUser.name || 'User'}
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--murmur-plum)',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    flexShrink: 0,
+                  }}
+                >
+                  {(currentUser.name || currentUser.email || 'A').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    color: 'var(--murmur-text-primary)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {currentUser.name || currentUser.email.split('@')[0]}
+                </span>
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    color: 'var(--murmur-text-tertiary)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {currentUser.email}
+                </span>
+              </div>
+            </div>
+
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: '#10B981',
+                flexShrink: 0,
+              }}
+              title="Active session"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenLogin}
+            style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '11px',
-              fontWeight: '700',
-            }}
-          >
-            A
-          </div>
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 500,
+              gap: '8px',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--murmur-border)',
               color: 'var(--murmur-text-primary)',
+              fontSize: '12.5px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: 'var(--murmur-shadow-subtle)',
+              transition: 'all 0.15s ease',
+              width: '100%',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--murmur-plum)';
+              e.currentTarget.style.transform = 'translateY(-0.5px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--murmur-border)';
+              e.currentTarget.style.transform = 'none';
             }}
           >
-            Arunkumar
-          </span>
-        </div>
+            <div
+              style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '4px',
+                backgroundColor: 'var(--murmur-plum)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <span>Sign In to Murmur</span>
+          </button>
+        )}
       </div>
     </aside>
   );

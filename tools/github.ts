@@ -70,12 +70,24 @@ const githubCreatePullRequest: ToolDefinition = {
   source: 'api',
 };
 
-async function githubFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const token = await connectorsStore.getConnectorToken('github');
-  if (!token) {
-    throw new Error('GitHub Personal Access Token not configured. Connect your GitHub account in Connectors.');
-  }
+import type { ToolContext } from './registry';
 
+async function getGitHubToken(context?: ToolContext): Promise<{ token?: string; error?: string }> {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your GitHub account in the Connections tab.',
+    };
+  }
+  const token = await connectorsStore.getConnectorToken('github', context.userId);
+  if (!token) {
+    return {
+      error: 'GitHub is not connected for your account. Please connect your GitHub account in the Connections tab.',
+    };
+  }
+  return { token };
+}
+
+async function githubFetch(path: string, token: string, options: RequestInit = {}): Promise<Response> {
   return fetch(`https://api.github.com${path}`, {
     ...options,
     headers: {
@@ -90,11 +102,15 @@ async function githubFetch(path: string, options: RequestInit = {}): Promise<Res
 
 export function registerGitHubTools(): void {
   // List repos
-  toolRegistry.register(githubListRepos, async (args) => {
+  toolRegistry.register(githubListRepos, async (args, context) => {
+    const { token, error } = await getGitHubToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'GitHub not connected' };
+    }
     try {
       const visibility = (args.visibility as string) || 'all';
       const limit = (args.limit as number) || 20;
-      const res = await githubFetch(`/user/repos?visibility=${visibility}&per_page=${limit}&sort=updated`);
+      const res = await githubFetch(`/user/repos?visibility=${visibility}&per_page=${limit}&sort=updated`, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `GitHub API error (${res.status}): ${err}` };
@@ -114,14 +130,18 @@ export function registerGitHubTools(): void {
       return { success: true, result: { count: repos.length, repositories: repos } };
     } catch (err) {
       logger.error('GitHubTool', 'List repos failed', { error: String(err) });
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      return { success: false, error: err instanceof Error ? err.message : String(err)} ;
     }
   });
 
   // Get repo
-  toolRegistry.register(githubGetRepo, async (args) => {
+  toolRegistry.register(githubGetRepo, async (args, context) => {
+    const { token, error } = await getGitHubToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'GitHub not connected' };
+    }
     try {
-      const res = await githubFetch(`/repos/${args.owner}/${args.repo}`);
+      const res = await githubFetch(`/repos/${args.owner}/${args.repo}`, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `Repository not found (${res.status}): ${err}` };
@@ -148,11 +168,15 @@ export function registerGitHubTools(): void {
   });
 
   // List issues
-  toolRegistry.register(githubListIssues, async (args) => {
+  toolRegistry.register(githubListIssues, async (args, context) => {
+    const { token, error } = await getGitHubToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'GitHub not connected' };
+    }
     try {
       const state = (args.state as string) || 'open';
       const limit = (args.limit as number) || 15;
-      const res = await githubFetch(`/repos/${args.owner}/${args.repo}/issues?state=${state}&per_page=${limit}`);
+      const res = await githubFetch(`/repos/${args.owner}/${args.repo}/issues?state=${state}&per_page=${limit}`, token);
       if (!res.ok) {
         const err = await res.text();
         return { success: false, error: `Failed to list issues (${res.status}): ${err}` };
@@ -174,9 +198,13 @@ export function registerGitHubTools(): void {
   });
 
   // Create issue
-  toolRegistry.register(githubCreateIssue, async (args) => {
+  toolRegistry.register(githubCreateIssue, async (args, context) => {
+    const { token, error } = await getGitHubToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'GitHub not connected' };
+    }
     try {
-      const res = await githubFetch(`/repos/${args.owner}/${args.repo}/issues`, {
+      const res = await githubFetch(`/repos/${args.owner}/${args.repo}/issues`, token, {
         method: 'POST',
         body: JSON.stringify({
           title: args.title,
@@ -203,9 +231,13 @@ export function registerGitHubTools(): void {
   });
 
   // Create PR
-  toolRegistry.register(githubCreatePullRequest, async (args) => {
+  toolRegistry.register(githubCreatePullRequest, async (args, context) => {
+    const { token, error } = await getGitHubToken(context);
+    if (error || !token) {
+      return { success: false, error: error || 'GitHub not connected' };
+    }
     try {
-      const res = await githubFetch(`/repos/${args.owner}/${args.repo}/pulls`, {
+      const res = await githubFetch(`/repos/${args.owner}/${args.repo}/pulls`, token, {
         method: 'POST',
         body: JSON.stringify({
           title: args.title,

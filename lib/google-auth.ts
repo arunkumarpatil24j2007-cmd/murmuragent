@@ -124,7 +124,11 @@ export function generateGoogleAuthUrl(state?: string, redirectUri?: string): str
 }
 
 /** Exchange authorization code for access & refresh tokens and persist them */
-export async function exchangeGoogleCode(code: string, redirectUri?: string): Promise<GoogleStoredTokens> {
+export async function exchangeGoogleCode(
+  code: string,
+  redirectUri?: string,
+  userId?: string
+): Promise<GoogleStoredTokens> {
   const client = createOAuth2Client(redirectUri);
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
@@ -143,8 +147,8 @@ export async function exchangeGoogleCode(code: string, redirectUri?: string): Pr
     logger.warn('GoogleAuth', 'Failed to fetch userinfo during token exchange', { error: String(err) });
   }
 
-  // Preserve existing refresh token if Google does not return a new one on re-auth
-  const existing = await tokenStore.getTokens(userInfo.email);
+  const lookupKey = userId || userInfo.email;
+  const existing = lookupKey ? await tokenStore.getTokens(lookupKey) : null;
   const stored: GoogleStoredTokens = {
     access_token: tokens.access_token || existing?.access_token || null,
     refresh_token: tokens.refresh_token || existing?.refresh_token || null,
@@ -155,16 +159,22 @@ export async function exchangeGoogleCode(code: string, redirectUri?: string): Pr
     updatedAt: new Date().toISOString(),
   };
 
-  await tokenStore.saveTokens(stored, true);
+  const customAccountId = userId ? `user:${userId}:google` : userInfo.email;
+  await tokenStore.saveTokens(stored, false, customAccountId);
   return stored;
 }
 
 /**
- * Returns an authenticated OAuth2Client with valid tokens,
+ * Returns an authenticated OAuth2Client with valid tokens for the specific user,
  * automatically refreshing the access token if expired.
+ * CRITICAL: Returns null if no user is specified.
  */
-export async function getAuthenticatedGoogleClient(accountId?: string): Promise<OAuth2Client | null> {
-  const stored = await tokenStore.getTokens(accountId);
+export async function getAuthenticatedGoogleClient(userId?: string): Promise<OAuth2Client | null> {
+  if (!userId || !userId.trim()) {
+    return null;
+  }
+
+  const stored = await tokenStore.getTokens(userId.trim());
   if (!stored || (!stored.access_token && !stored.refresh_token)) {
     return null;
   }
@@ -182,7 +192,7 @@ export async function getAuthenticatedGoogleClient(accountId?: string): Promise<
 
   if (isExpiring && stored.refresh_token) {
     try {
-      logger.info('GoogleAuth', 'Refreshing expired Google access token...');
+      logger.info('GoogleAuth', 'Refreshing expired Google access token for user...', { userId });
       const { credentials } = await client.refreshAccessToken();
       const updated: GoogleStoredTokens = {
         ...stored,
@@ -190,10 +200,11 @@ export async function getAuthenticatedGoogleClient(accountId?: string): Promise<
         expiry_date: credentials.expiry_date || stored.expiry_date,
         updatedAt: new Date().toISOString(),
       };
-      await tokenStore.saveTokens(updated, true);
+      const customAccountId = `user:${userId.trim()}:google`;
+      await tokenStore.saveTokens(updated, false, customAccountId);
       client.setCredentials(credentials);
     } catch (err) {
-      logger.error('GoogleAuth', 'Failed to refresh Google token', { error: String(err) });
+      logger.error('GoogleAuth', 'Failed to refresh Google token for user', { error: String(err), userId });
       return null;
     }
   }
@@ -201,9 +212,11 @@ export async function getAuthenticatedGoogleClient(accountId?: string): Promise<
   return client;
 }
 
-/** Revoke access token with Google API and clear stored credentials */
-export async function disconnectGoogle(accountId?: string): Promise<boolean> {
-  const stored = await tokenStore.getTokens(accountId);
+/** Revoke access token with Google API and clear stored credentials for user */
+export async function disconnectGoogle(userId?: string): Promise<boolean> {
+  if (!userId || !userId.trim()) return false;
+  const cleanId = userId.trim();
+  const stored = await tokenStore.getTokens(cleanId);
   if (stored?.access_token) {
     try {
       const client = createOAuth2Client();
@@ -213,23 +226,38 @@ export async function disconnectGoogle(accountId?: string): Promise<boolean> {
       logger.warn('GoogleAuth', 'Error revoking token with Google, clearing local store anyway', { error: String(err) });
     }
   }
-  await tokenStore.deleteTokens(accountId);
+  await tokenStore.deleteTokens(cleanId);
+  await tokenStore.deleteTokens(`user:${cleanId}:google`);
   return true;
 }
 
 /** Return current connection status for UI and diagnostic routes (Sanitized, no tokens exposed) */
-export async function getGoogleAuthStatus(accountId?: string): Promise<GoogleAuthStatus> {
+export async function getGoogleAuthStatus(userId?: string): Promise<GoogleAuthStatus> {
   const isConfigured = !!(env.google.clientId && env.google.clientSecret);
   const storeType = tokenStore.getStoreType();
-  const stored = await tokenStore.getTokens(accountId);
-  const accounts = await tokenStore.listAccounts();
+
+  if (!userId || !userId.trim()) {
+    return {
+      isConfigured,
+      isConnected: false,
+      storeType,
+      capabilities: {
+        gmail: false,
+        calendar: false,
+        drive: false,
+        docs: false,
+        sheets: false,
+      },
+    };
+  }
+
+  const stored = await tokenStore.getTokens(userId.trim());
 
   if (!stored || (!stored.access_token && !stored.refresh_token)) {
     return {
       isConfigured,
       isConnected: false,
       storeType,
-      accountsCount: accounts.length,
       capabilities: {
         gmail: false,
         calendar: false,
@@ -262,6 +290,5 @@ export async function getGoogleAuthStatus(accountId?: string): Promise<GoogleAut
     expiresAt,
     scopes,
     capabilities,
-    accountsCount: accounts.length,
   };
 }

@@ -5,13 +5,90 @@ import { Sidebar, type NavTab } from './sidebar';
 import { AgentConsole } from './agent-console';
 import { ToolsView } from './tools-view';
 import { ConnectorsView } from './connectors-view';
+import { UsersView } from './users-view';
 import { SettingsModal } from './settings-modal';
+import { LoginModal } from './login-modal';
+import { AgentNotch } from '@/components/agent-notch';
+
+interface UserSession {
+  email: string;
+  name: string;
+  picture?: string | null;
+}
 
 export function MacOSApp() {
   const [activeTab, setActiveTab] = useState<NavTab>('agent');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [connectedCount, setConnectedCount] = useState<number>(5);
+  const [usersCount, setUsersCount] = useState<number>(0);
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [conversationKey, setConversationKey] = useState<number>(1);
+  const [conversations, setConversations] = useState<Array<{ id: string; title: string; time: string; group: 'today' | 'yesterday' | 'previous' }>>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(undefined);
+
+  // Fetch conversations for authenticated user
+  const fetchConversations = () => {
+    fetch('/api/sessions')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data?.sessions)) {
+          setConversations(
+            data.sessions.map((s: any) => ({
+              id: s.id,
+              title: s.title || 'New Conversation',
+              time: s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+              group: s.group || 'today',
+            }))
+          );
+        } else {
+          setConversations([]);
+        }
+      })
+      .catch(() => setConversations([]));
+  };
+
+  // Fetch initial session & user profile
+  const fetchSession = () => {
+    fetch('/api/auth/session')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.authenticated && data?.email) {
+          setCurrentUser({
+            email: data.email,
+            name: data.name || data.email.split('@')[0],
+            picture: data.picture || null,
+          });
+          fetchConversations();
+        } else {
+          setCurrentUser(null);
+          setConversations([]);
+          // Prompt for login whenever user opens the app without an active session
+          if (typeof window !== 'undefined') {
+            const hasDismissed = sessionStorage.getItem('murmur_guest_dismissed');
+            if (!hasDismissed) {
+              setIsLoginModalOpen(true);
+            }
+          }
+        }
+      })
+      .catch(() => {
+        setCurrentUser(null);
+        setConversations([]);
+      });
+  };
+
+  // Fetch initial users count
+  const fetchUsersCount = () => {
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.total === 'number') {
+          setUsersCount(data.total);
+        }
+      })
+      .catch(() => {});
+  };
 
   // Fetch initial connectors count
   useEffect(() => {
@@ -23,28 +100,38 @@ export function MacOSApp() {
         }
       })
       .catch(() => {});
+
+    fetchSession();
+    fetchUsersCount();
   }, []);
 
-  // Native tab switching bridge support
+  // Native tab switching & URL query param bridge support
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get('tab') as NavTab;
-      if (tabParam && ['agent', 'connectors', 'tools'].includes(tabParam)) {
-        setActiveTab(tabParam);
-      }
-
-      (window as any).murmurSetTab = (tab: NavTab) => {
-        if (['agent', 'connectors', 'tools'].includes(tab)) {
-          setActiveTab(tab);
-        }
-      };
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab') as NavTab | null;
+    if (tabParam && ['agent', 'connectors', 'tools', 'users'].includes(tabParam)) {
+      setActiveTab(tabParam);
     }
   }, []);
 
   const handleNewChat = () => {
-    setActiveTab('agent');
-    setConversationKey((k) => k + 1);
+    setCurrentConversationId(undefined);
+    setConversationKey((prev) => prev + 1);
+    fetchConversations();
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setCurrentConversationId(id);
+    setConversationKey((prev) => prev + 1);
+  };
+
+  const handleDeleteConversation = async (id: string) => {
+    await fetch(`/api/sessions?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (currentConversationId === id) {
+      handleNewChat();
+    }
   };
 
   return (
@@ -60,13 +147,23 @@ export function MacOSApp() {
         position: 'relative',
       }}
     >
+      {/* Central Interactive MacBook Notch */}
+      <AgentNotch />
+
       {/* Minimalist Sidebar */}
       <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onNewChat={handleNewChat}
+        conversations={conversations}
+        currentConversationId={currentConversationId}
+        onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
         connectorsCount={connectedCount}
+        usersCount={usersCount}
+        currentUser={currentUser}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
       />
 
       {/* Main Workspace Canvas */}
@@ -85,6 +182,7 @@ export function MacOSApp() {
         {activeTab === 'agent' && (
           <AgentConsole
             key={conversationKey}
+            conversationId={currentConversationId}
             onNewConversation={handleNewChat}
           />
         )}
@@ -98,12 +196,35 @@ export function MacOSApp() {
         {activeTab === 'tools' && (
           <ToolsView />
         )}
+
+        {activeTab === 'users' && (
+          <UsersView
+            onOpenLoginModal={() => setIsLoginModalOpen(true)}
+            currentUserEmail={currentUser?.email}
+          />
+        )}
       </main>
 
-      {/* Redesigned Settings Modal */}
+      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Login Modal for Visitors & Murmur App Accounts */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => {
+          setIsLoginModalOpen(false);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('murmur_guest_dismissed', 'true');
+          }
+        }}
+        onSuccess={() => {
+          fetchSession();
+          fetchUsersCount();
+        }}
+        returnTo={`/?tab=${activeTab}`}
       />
     </div>
   );

@@ -15,6 +15,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [localConnected, setLocalConnected] = useState<boolean>(true);
   const [temperature, setTemperature] = useState<number>(0.3);
   const [streamEnabled, setStreamEnabled] = useState<boolean>(true);
+  const [sessionUser, setSessionUser] = useState<{ email?: string; name?: string; picture?: string } | null>(null);
   const [voiceLanguage, setVoiceLanguage] = useState<string>('en-US');
 
   useEffect(() => {
@@ -24,12 +25,35 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       if (saved) setSelectedModel(saved);
     } catch {}
 
+    fetch('/api/user/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.settings) {
+          if (data.settings.selectedModel) setSelectedModel(data.settings.selectedModel);
+          if (typeof data.settings.temperature === 'number') setTemperature(data.settings.temperature);
+          if (typeof data.settings.streamEnabled === 'boolean') setStreamEnabled(data.settings.streamEnabled);
+          if (data.settings.voiceLanguage) setVoiceLanguage(data.settings.voiceLanguage);
+        }
+      })
+      .catch(() => {});
+
     fetch('/api/health')
       .then((res) => res.json())
       .then((data) => {
         setLocalConnected(data?.providers?.local?.status === 'available');
       })
       .catch(() => setLocalConnected(false));
+
+    fetch('/api/auth/session')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.authenticated && data?.email) {
+          setSessionUser({ email: data.email, name: data.name, picture: data.picture });
+        } else {
+          setSessionUser(null);
+        }
+      })
+      .catch(() => setSessionUser(null));
   }, [isOpen]);
 
   const handleModelChange = (modelId: string) => {
@@ -37,6 +61,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     try {
       localStorage.setItem('murmur_selected_model', modelId);
     } catch {}
+    if (sessionUser) {
+      fetch('/api/user/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedModel: modelId }),
+      }).catch(() => {});
+    }
   };
 
   if (!isOpen) return null;
@@ -170,17 +201,83 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
-                      Account
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
-                      arunkumarpatil24j2007@gmail.com
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {sessionUser?.picture ? (
+                      <img
+                        src={sessionUser.picture}
+                        alt="User Avatar"
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--murmur-plum)',
+                          color: '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {(sessionUser?.name || sessionUser?.email || 'U').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--murmur-text-primary)' }}>
+                        {sessionUser?.name || (sessionUser?.email ? sessionUser.email.split('@')[0] : 'Guest User')}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--murmur-text-muted)' }}>
+                        {sessionUser?.email || 'Not signed in'}
+                      </div>
                     </div>
                   </div>
-                  <span style={{ fontSize: '12px', color: 'var(--murmur-text-secondary)', fontWeight: 500 }}>
-                    Active
-                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {sessionUser?.email ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await fetch('/api/auth/logout', { method: 'POST' });
+                          window.location.reload();
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--murmur-border)',
+                          backgroundColor: 'transparent',
+                          color: '#DC2626',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Log Out
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.href = '/api/auth/google/login?return_to=' + encodeURIComponent(window.location.pathname + window.location.search);
+                        }}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          backgroundColor: 'var(--murmur-plum)',
+                          color: '#FFFFFF',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Log In with Google
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ height: '1px', backgroundColor: 'var(--murmur-border-subtle)' }} />

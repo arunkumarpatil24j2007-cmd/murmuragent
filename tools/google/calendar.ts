@@ -137,17 +137,33 @@ const calendarMeetingPrep: ToolDefinition = {
   riskLevel: 'low',
 };
 
+// MARK: - Auth Helper
+
+async function getCalendarAuth(context?: import('../registry').ToolContext) {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Google account in the Connections tab to access Google Calendar.',
+    };
+  }
+  const auth = await getAuthenticatedGoogleClient(context.userId);
+  if (!auth) {
+    return {
+      error: 'Google Calendar is not connected for your account. Please connect your Google account in the Connections tab.',
+    };
+  }
+  return { auth };
+}
+
 // MARK: - Registration
 
 export function registerCalendarTools(): void {
   // 1. calendar.listEvents
-  toolRegistry.register(calendarListEvents, async (args) => {
-    const auth = await getAuthenticatedGoogleClient();
-    if (!auth) {
+  toolRegistry.register(calendarListEvents, async (args, context) => {
+    const { auth, error } = await getCalendarAuth(context);
+    if (error || !auth) {
       return {
         success: false,
-        error:
-          'Google Workspace is not connected. Please click [Connect Google] in the Connectors tab to authorize Google Calendar.',
+        error,
       };
     }
 
@@ -198,13 +214,12 @@ export function registerCalendarTools(): void {
   });
 
   // 2. calendar.createEvent
-  toolRegistry.register(calendarCreateEvent, async (args) => {
-    const auth = await getAuthenticatedGoogleClient();
-    if (!auth) {
+  toolRegistry.register(calendarCreateEvent, async (args, context) => {
+    const { auth, error } = await getCalendarAuth(context);
+    if (error || !auth) {
       return {
         success: false,
-        error:
-          'Google Workspace is not connected. Please click [Connect Google] in the Connectors tab to authorize Google Calendar.',
+        error,
       };
     }
 
@@ -272,13 +287,12 @@ export function registerCalendarTools(): void {
   });
 
   // 3. calendar.deleteEvent
-  toolRegistry.register(calendarDeleteEvent, async (args) => {
-    const auth = await getAuthenticatedGoogleClient();
-    if (!auth) {
+  toolRegistry.register(calendarDeleteEvent, async (args, context) => {
+    const { auth, error } = await getCalendarAuth(context);
+    if (error || !auth) {
       return {
         success: false,
-        error:
-          'Google Workspace is not connected. Please click [Connect Google] in the Connectors tab to authorize Google Calendar.',
+        error,
       };
     }
 
@@ -305,12 +319,12 @@ export function registerCalendarTools(): void {
   });
 
   // 4. calendar.updateEvent
-  toolRegistry.register(calendarUpdateEvent, async (args) => {
-    const auth = await getAuthenticatedGoogleClient();
-    if (!auth) {
+  toolRegistry.register(calendarUpdateEvent, async (args, context) => {
+    const { auth, error } = await getCalendarAuth(context);
+    if (error || !auth) {
       return {
         success: false,
-        error: 'Google Workspace is not connected. Please connect via /api/auth/google/login',
+        error,
       };
     }
 
@@ -345,12 +359,12 @@ export function registerCalendarTools(): void {
   });
 
   // 5. calendar.meetingPrep
-  toolRegistry.register(calendarMeetingPrep, async (args) => {
-    const auth = await getAuthenticatedGoogleClient();
-    if (!auth) {
+  toolRegistry.register(calendarMeetingPrep, async (args, context) => {
+    const { auth, error } = await getCalendarAuth(context);
+    if (error || !auth) {
       return {
         success: false,
-        error: 'Google Workspace is not connected. Please connect via /api/auth/google/login',
+        error,
       };
     }
 

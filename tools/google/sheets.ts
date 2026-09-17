@@ -91,15 +91,32 @@ const sheetsAppendLeads: ToolDefinition = {
   riskLevel: 'low',
 };
 
+// MARK: - Auth Helper
+
+async function getSheetsAuth(context?: import('../registry').ToolContext) {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Google account in the Connections tab to access Google Sheets.',
+    };
+  }
+  const auth = await getAuthenticatedGoogleClient(context.userId);
+  if (!auth) {
+    return {
+      error: 'Google Sheets is not connected for your account. Please connect your Google account in the Connections tab.',
+    };
+  }
+  return { auth };
+}
+
 // MARK: - Registrations
 
 export function registerSheetsTools(): void {
   // 1. Create Spreadsheet
-  toolRegistry.register(sheetsCreate, async (args) => {
+  toolRegistry.register(sheetsCreate, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getSheetsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const title = (args.title as string) || 'Untitled Spreadsheet';
@@ -163,11 +180,11 @@ export function registerSheetsTools(): void {
   });
 
   // 2. Read Spreadsheet
-  toolRegistry.register(sheetsRead, async (args) => {
+  toolRegistry.register(sheetsRead, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getSheetsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const spreadsheetId = args.spreadsheetId as string;
@@ -199,11 +216,11 @@ export function registerSheetsTools(): void {
   });
 
   // 3. Update Spreadsheet
-  toolRegistry.register(sheetsUpdate, async (args) => {
+  toolRegistry.register(sheetsUpdate, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getSheetsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const spreadsheetId = args.spreadsheetId as string;
@@ -239,11 +256,11 @@ export function registerSheetsTools(): void {
   });
 
   // 4. Append Rows
-  toolRegistry.register(sheetsAppend, async (args) => {
+  toolRegistry.register(sheetsAppend, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getSheetsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const spreadsheetId = args.spreadsheetId as string;
@@ -278,11 +295,11 @@ export function registerSheetsTools(): void {
   });
 
   // 5. Append Leads
-  toolRegistry.register(sheetsAppendLeads, async (args) => {
+  toolRegistry.register(sheetsAppendLeads, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getSheetsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const sheets = google.sheets({ version: 'v4', auth });

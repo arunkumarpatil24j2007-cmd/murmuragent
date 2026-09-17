@@ -85,15 +85,32 @@ const docsGenerateProposal: ToolDefinition = {
   riskLevel: 'low',
 };
 
+// MARK: - Auth Helper
+
+async function getDocsAuth(context?: import('../registry').ToolContext) {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Google account in the Connections tab to access Google Docs.',
+    };
+  }
+  const auth = await getAuthenticatedGoogleClient(context.userId);
+  if (!auth) {
+    return {
+      error: 'Google Docs is not connected for your account. Please connect your Google account in the Connections tab.',
+    };
+  }
+  return { auth };
+}
+
 // MARK: - Registrations
 
 export function registerDocsTools(): void {
   // 1. Create Document
-  toolRegistry.register(docsCreate, async (args) => {
+  toolRegistry.register(docsCreate, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDocsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const title = (args.title as string) || 'Untitled Document';
@@ -148,11 +165,11 @@ export function registerDocsTools(): void {
   });
 
   // 2. Read Document
-  toolRegistry.register(docsRead, async (args) => {
+  toolRegistry.register(docsRead, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDocsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const documentId = args.documentId as string;
@@ -183,11 +200,11 @@ export function registerDocsTools(): void {
   });
 
   // 3. Update / Append Document
-  toolRegistry.register(docsUpdate, async (args) => {
+  toolRegistry.register(docsUpdate, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDocsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const documentId = args.documentId as string;
@@ -232,11 +249,11 @@ export function registerDocsTools(): void {
   });
 
   // 4. Generate Proposal
-  toolRegistry.register(docsGenerateProposal, async (args) => {
+  toolRegistry.register(docsGenerateProposal, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getDocsAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const clientName = (args.clientName as string) || 'Client';

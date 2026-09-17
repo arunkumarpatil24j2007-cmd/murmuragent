@@ -1,8 +1,10 @@
 // app/api/auth/google/login/route.ts — Initiate Google Workspace OAuth 2.0 flow
+// Encodes existing userId into CSRF state if user is already logged in and connecting Google.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generateGoogleAuthUrl, generateOAuthState } from '@/lib/google-auth';
 import { env } from '@/lib/env';
+import { getAuthenticatedUser } from '@/lib/auth-session';
 
 export async function GET(req: NextRequest) {
   if (!env.google.clientId || !env.google.clientSecret) {
@@ -21,11 +23,15 @@ export async function GET(req: NextRequest) {
   const returnTo = searchParams.get('return_to') || '/?tab=connectors';
 
   try {
-    // Generate signed, expiring CSRF state
-    const { stateParam, cookieValue } = generateOAuthState();
+    // Check if user is already authenticated
+    const currentUser = await getAuthenticatedUser(req);
+    const userId = currentUser?.id || searchParams.get('userId') || undefined;
+
+    // Generate signed, expiring CSRF state containing optional userId
+    const { stateParam, cookieValue } = generateOAuthState(userId);
     const authUrl = generateGoogleAuthUrl(stateParam, customRedirect);
 
-    // If caller explicitly requested JSON format (e.g. for popup window flow)
+    // If caller explicitly requested JSON format
     if (format === 'json' || req.headers.get('accept')?.includes('application/json')) {
       const response = NextResponse.json({ url: authUrl });
       response.cookies.set('murmur_google_oauth_state', cookieValue, {

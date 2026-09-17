@@ -2,9 +2,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { connectorsStore, type ConnectorId } from '@/lib/connectors-store';
+import { getAuthenticatedUser } from '@/lib/auth-session';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(req);
     const body = await req.json();
     const { connectorId } = body as { connectorId: ConnectorId };
 
@@ -12,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing connectorId' }, { status: 400 });
     }
 
-    const testResult = await connectorsStore.testConnector(connectorId);
+    const testResult = await connectorsStore.testConnector(connectorId, user?.id);
     return NextResponse.json(testResult);
   } catch (err) {
     return NextResponse.json(

@@ -4,7 +4,16 @@
 import { logger } from '@/lib/logger';
 import type { ToolDefinition, ToolResult } from '@/lib/schemas';
 
-export type ToolExecutor = (args: Record<string, unknown>) => Promise<{
+export interface ToolContext {
+  userId?: string | null;
+  signal?: AbortSignal;
+  [key: string]: unknown;
+}
+
+export type ToolExecutor = (
+  args: Record<string, unknown>,
+  context?: ToolContext
+) => Promise<{
   success: boolean;
   result?: unknown;
   error?: string;
@@ -43,7 +52,7 @@ class ToolRegistry {
     return Array.from(this.tools.values()).map((t) => t.definition);
   }
 
-  async execute(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(name: string, args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
       return {
@@ -69,8 +78,11 @@ class ToolRegistry {
         }
       }
 
-      logger.info('ToolRegistry', `Executing tool: ${name}`, { args: Object.keys(normalizedArgs) });
-      const result = await tool.execute(normalizedArgs);
+      logger.info('ToolRegistry', `Executing tool: ${name}`, {
+        args: Object.keys(normalizedArgs),
+        userId: context?.userId || 'guest',
+      });
+      const result = await tool.execute(normalizedArgs, context);
       const duration = Date.now() - start;
       logger.info('ToolRegistry', `Tool ${name} completed in ${duration}ms`, { success: result.success });
       return {

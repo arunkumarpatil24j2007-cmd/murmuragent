@@ -170,15 +170,32 @@ const gmailExtractLeads: ToolDefinition = {
   riskLevel: 'low',
 };
 
+// MARK: - Auth Helper
+
+async function getGmailAuth(context?: import('../registry').ToolContext) {
+  if (!context?.userId) {
+    return {
+      error: 'You are not logged in. Please sign in to Murmur and connect your Google account in the Connections tab to access Gmail.',
+    };
+  }
+  const auth = await getAuthenticatedGoogleClient(context.userId);
+  if (!auth) {
+    return {
+      error: 'Gmail is not connected for your account. Please connect your Google account in the Connections tab.',
+    };
+  }
+  return { auth };
+}
+
 // MARK: - Registrations
 
 export function registerGmailTools(): void {
   // 1. Search
-  toolRegistry.register(gmailSearch, async (args) => {
+  toolRegistry.register(gmailSearch, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const query = (args.query as string) || '';
@@ -240,11 +257,11 @@ export function registerGmailTools(): void {
   });
 
   // 2. Read Message
-  toolRegistry.register(gmailRead, async (args) => {
+  toolRegistry.register(gmailRead, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const emailId = args.emailId as string;
@@ -282,9 +299,8 @@ export function registerGmailTools(): void {
           from: getHeader(headers, 'From'),
           to: getHeader(headers, 'To'),
           date: getHeader(headers, 'Date'),
-          snippet: msg.data.snippet,
-          body: text,
-          html,
+          body: text || html || msg.data.snippet || '',
+          snippet: msg.data.snippet || '',
           attachments,
           labels: msg.data.labelIds || [],
           url: `https://mail.google.com/mail/u/0/#inbox/${msg.data.id}`,
@@ -297,11 +313,11 @@ export function registerGmailTools(): void {
   });
 
   // 3. Get Thread
-  toolRegistry.register(gmailGetThread, async (args) => {
+  toolRegistry.register(gmailGetThread, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const threadId = args.threadId as string;
@@ -342,11 +358,11 @@ export function registerGmailTools(): void {
   });
 
   // 4. Draft
-  toolRegistry.register(gmailDraft, async (args) => {
+  toolRegistry.register(gmailDraft, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const { to, subject, body } = args as { to: string; subject: string; body: string };
@@ -377,11 +393,11 @@ export function registerGmailTools(): void {
   });
 
   // 5. Send
-  toolRegistry.register(gmailSend, async (args) => {
+  toolRegistry.register(gmailSend, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const { to, subject, body } = args as { to: string; subject: string; body: string };
@@ -411,11 +427,11 @@ export function registerGmailTools(): void {
   });
 
   // 6. Reply
-  toolRegistry.register(gmailReply, async (args) => {
+  toolRegistry.register(gmailReply, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const { emailId, body } = args as { emailId: string; body: string };
@@ -471,11 +487,11 @@ export function registerGmailTools(): void {
   });
 
   // 7. List Unanswered Emails
-  toolRegistry.register(gmailListUnanswered, async (args) => {
+  toolRegistry.register(gmailListUnanswered, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const days = Math.min(Math.max(1, Number(args.days) || 7), 30);
@@ -538,11 +554,11 @@ export function registerGmailTools(): void {
   });
 
   // 8. Extract Leads from Emails
-  toolRegistry.register(gmailExtractLeads, async (args) => {
+  toolRegistry.register(gmailExtractLeads, async (args, context) => {
     try {
-      const auth = await getAuthenticatedGoogleClient();
-      if (!auth) {
-        return { success: false, error: 'Google account is not connected. Please connect via /api/auth/google/login' };
+      const { auth, error } = await getGmailAuth(context);
+      if (error || !auth) {
+        return { success: false, error };
       }
 
       const rawQuery = (args.query as string) || 'inbox';
