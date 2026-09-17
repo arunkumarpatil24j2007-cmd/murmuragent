@@ -322,14 +322,16 @@ export function Composer({
       {/* ─── Main Clean Input Container ─── */}
       <div
         style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '16px',
-          border: '1px solid var(--murmur-border-solid)',
-          boxShadow: isHero ? 'var(--murmur-shadow-card)' : 'var(--murmur-shadow-subtle)',
-          padding: '12px 14px 10px 14px',
+          backgroundColor: '#FFFDFC',
+          borderRadius: '24px',
+          border: '1px solid rgba(245, 210, 225, 0.9)',
+          boxShadow: isHero
+            ? '0 12px 36px -8px rgba(45, 11, 27, 0.08), 0 2px 8px rgba(245, 210, 225, 0.3)'
+            : '0 4px 16px -4px rgba(45, 11, 27, 0.06), 0 1px 4px rgba(245, 210, 225, 0.2)',
+          padding: isHero ? '16px 18px 12px 18px' : '12px 16px 10px 16px',
           display: 'flex',
           flexDirection: 'column',
-          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+          transition: 'all 0.18s ease',
         }}
       >
         {/* Textarea */}
@@ -349,14 +351,14 @@ export function Composer({
             resize: 'none',
             border: 'none',
             outline: 'none',
-            fontSize: '14.5px',
-            lineHeight: '1.5',
+            fontSize: '15px',
+            lineHeight: '1.55',
             fontFamily: 'inherit',
-            color: 'var(--murmur-text-primary)',
+            color: 'var(--murmur-plum)',
             backgroundColor: 'transparent',
-            minHeight: isHero ? '48px' : '28px',
+            minHeight: isHero ? '54px' : '30px',
             maxHeight: '180px',
-            padding: '2px 0 6px 0',
+            padding: '2px 2px 8px 2px',
           }}
         />
 
@@ -366,21 +368,21 @@ export function Composer({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginTop: '6px',
+            marginTop: '4px',
           }}
         >
           {/* Left Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {/* Mode Switcher Pill: [ Chat ] [ Agent ] */}
             <div
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                backgroundColor: 'var(--murmur-sidebar)',
-                borderRadius: '20px',
-                padding: '2px',
-                gap: '1px',
-                border: '1px solid var(--murmur-border)',
+                backgroundColor: 'rgba(235, 227, 221, 0.65)',
+                borderRadius: '24px',
+                padding: '2.5px',
+                gap: '2px',
+                border: '1px solid rgba(220, 210, 204, 0.7)',
               }}
             >
               <button
@@ -432,24 +434,24 @@ export function Composer({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '4px 8px',
-                borderRadius: '14px',
-                border: '1px solid var(--murmur-border)',
-                backgroundColor: 'transparent',
-                color: 'var(--murmur-text-secondary)',
-                fontSize: '11.5px',
+                gap: '5px',
+                padding: '4px 10px',
+                borderRadius: '20px',
+                border: '1px solid rgba(220, 210, 204, 0.8)',
+                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                color: 'var(--murmur-plum)',
+                fontSize: '12px',
                 fontWeight: 500,
                 cursor: 'pointer',
                 transition: 'all 0.12s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--murmur-sidebar)';
-                e.currentTarget.style.color = 'var(--murmur-text-primary)';
+                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                e.currentTarget.style.borderColor = 'rgba(239, 164, 191, 0.8)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'var(--murmur-text-secondary)';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                e.currentTarget.style.borderColor = 'rgba(220, 210, 204, 0.8)';
               }}
             >
               <span>{activeModelLabel || 'Claude Opus 4.6'}</span>
@@ -464,28 +466,30 @@ export function Composer({
               onClick={() => setIsAttachOpen((p) => !p)}
               title="Add attachment or link"
               style={{
-                width: '26px',
-                height: '26px',
+                width: '28px',
+                height: '28px',
                 borderRadius: '50%',
-                border: 'none',
-                backgroundColor: 'transparent',
+                border: '1px solid rgba(220, 210, 204, 0.8)',
+                backgroundColor: 'rgba(255, 255, 255, 0.7)',
                 color: 'var(--murmur-text-secondary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                transition: 'background-color 0.12s',
+                transition: 'all 0.12s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--murmur-sidebar)';
+                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                e.currentTarget.style.borderColor = 'rgba(239, 164, 191, 0.8)';
                 e.currentTarget.style.color = 'var(--murmur-plum)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+                e.currentTarget.style.borderColor = 'rgba(220, 210, 204, 0.8)';
                 e.currentTarget.style.color = 'var(--murmur-text-secondary)';
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -493,15 +497,15 @@ export function Composer({
           </div>
 
           {/* Right Controls: Dictate & Send */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {/* Dictate / Microphone */}
             <button
               type="button"
               onClick={toggleRecording}
               title={isRecording ? 'Stop dictation' : 'Dictate with voice'}
               style={{
-                width: '28px',
-                height: '28px',
+                width: '30px',
+                height: '30px',
                 borderRadius: '50%',
                 border: 'none',
                 backgroundColor: isRecording ? '#FEE2E2' : 'transparent',
@@ -514,7 +518,7 @@ export function Composer({
               }}
               onMouseEnter={(e) => {
                 if (!isRecording) {
-                  e.currentTarget.style.backgroundColor = 'var(--murmur-sidebar)';
+                  e.currentTarget.style.backgroundColor = 'rgba(45, 11, 27, 0.05)';
                   e.currentTarget.style.color = 'var(--murmur-plum)';
                 }
               }}
@@ -525,7 +529,7 @@ export function Composer({
                 }
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" x2="12" y1="19" y2="22" />
@@ -539,19 +543,20 @@ export function Composer({
                 onClick={onStop}
                 title="Stop execution"
                 style={{
-                  width: '30px',
-                  height: '30px',
+                  width: '32px',
+                  height: '32px',
                   borderRadius: '50%',
                   border: 'none',
-                  backgroundColor: 'var(--murmur-sidebar-hover)',
+                  backgroundColor: 'rgba(45, 11, 27, 0.08)',
                   color: 'var(--murmur-plum)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
+                  transition: 'all 0.12s',
                 }}
               >
-                <div style={{ width: '9px', height: '9px', backgroundColor: 'var(--murmur-plum)', borderRadius: '2px' }} />
+                <div style={{ width: '10px', height: '10px', backgroundColor: 'var(--murmur-plum)', borderRadius: '2px' }} />
               </button>
             ) : (
               <button
@@ -560,20 +565,24 @@ export function Composer({
                 disabled={!value.trim() || disabled}
                 title="Send message (⏎)"
                 style={{
-                  width: '30px',
-                  height: '30px',
+                  width: '32px',
+                  height: '32px',
                   borderRadius: '50%',
-                  border: 'none',
-                  backgroundColor: value.trim() ? 'var(--murmur-plum)' : 'var(--murmur-sidebar)',
+                  border: value.trim() ? 'none' : '1px solid rgba(220, 210, 204, 0.7)',
+                  background: value.trim()
+                    ? 'linear-gradient(135deg, #EFA4BF 0%, #BFA2E8 100%)'
+                    : 'rgba(45, 11, 27, 0.03)',
                   color: value.trim() ? '#FFFFFF' : 'var(--murmur-text-muted)',
+                  boxShadow: value.trim() ? '0 3px 12px rgba(239, 164, 191, 0.45)' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: value.trim() ? 'pointer' : 'default',
-                  transition: 'all 0.15s ease',
+                  transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                  transform: value.trim() ? 'scale(1.02)' : 'scale(1)',
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="12" y1="19" x2="12" y2="5" />
                   <polyline points="5 12 12 5 19 12" />
                 </svg>

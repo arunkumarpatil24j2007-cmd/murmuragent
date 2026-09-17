@@ -93,13 +93,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '16px',
+          backgroundColor: '#FFFDFC',
+          borderRadius: '24px',
           width: '100%',
-          maxWidth: '620px',
-          height: '460px',
-          boxShadow: 'var(--murmur-shadow-modal)',
-          border: '1px solid var(--murmur-border-solid)',
+          maxWidth: '640px',
+          height: '480px',
+          boxShadow: '0 24px 60px -12px rgba(45, 11, 27, 0.22), 0 0 0 1px rgba(245, 210, 225, 0.3)',
+          border: '1px solid rgba(245, 210, 225, 0.85)',
           display: 'flex',
           overflow: 'hidden',
         }}
@@ -107,10 +107,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         {/* Left Navigation */}
         <div
           style={{
-            width: '180px',
-            backgroundColor: 'var(--murmur-sidebar)',
-            borderRight: '1px solid var(--murmur-border)',
-            padding: '20px 10px',
+            width: '185px',
+            backgroundColor: 'rgba(244, 239, 234, 0.7)',
+            borderRight: '1px solid rgba(220, 210, 204, 0.7)',
+            padding: '20px 12px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',

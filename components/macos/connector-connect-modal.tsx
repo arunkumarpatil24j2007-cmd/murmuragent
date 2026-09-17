@@ -131,12 +131,12 @@ export function ConnectorConnectModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '480px',
-          backgroundColor: '#FFFFFF',
-          borderRadius: '16px',
-          border: '1px solid var(--murmur-border-solid)',
-          boxShadow: 'var(--murmur-shadow-modal)',
-          padding: '24px 28px',
+          maxWidth: '500px',
+          backgroundColor: '#FFFDFC',
+          borderRadius: '24px',
+          border: '1px solid rgba(245, 210, 225, 0.85)',
+          boxShadow: '0 24px 60px -12px rgba(45, 11, 27, 0.22), 0 0 0 1px rgba(245, 210, 225, 0.3)',
+          padding: '26px 30px',
           display: 'flex',
           flexDirection: 'column',
           gap: '18px',

@@ -70,12 +70,12 @@ export function UsersView({
       >
         <div
           style={{
-            maxWidth: '440px',
+            maxWidth: '460px',
             width: '100%',
-            backgroundColor: '#FFFFFF',
-            borderRadius: '20px',
-            border: '1px solid var(--murmur-border-solid)',
-            boxShadow: '0 10px 30px -5px rgba(45, 13, 25, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
+            backgroundColor: '#FFFDFC',
+            borderRadius: '26px',
+            border: '1px solid rgba(245, 210, 225, 0.85)',
+            boxShadow: '0 20px 48px -10px rgba(45, 11, 27, 0.12), 0 0 0 1px rgba(245, 210, 225, 0.3)',
             padding: '36px 32px',
             display: 'flex',
             flexDirection: 'column',
@@ -85,29 +85,29 @@ export function UsersView({
         >
           <div
             style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '16px',
-              backgroundColor: 'rgba(45, 13, 25, 0.06)',
-              border: '1px solid rgba(45, 13, 25, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--murmur-plum)',
-              marginBottom: '18px',
+              position: 'relative',
+              width: '80px',
+              height: '80px',
+              marginBottom: '16px',
             }}
           >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+            <img
+              src="/admin-guard-buddy.png"
+              alt="Murmur Admin Guard"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 6px 14px rgba(245, 210, 225, 0.5))',
+              }}
+            />
           </div>
 
           <h2
             style={{
-              fontSize: '18px',
+              fontSize: '20px',
               fontWeight: 700,
-              color: 'var(--murmur-text-primary)',
+              color: 'var(--murmur-plum)',
               letterSpacing: '-0.02em',
               marginBottom: '8px',
             }}
@@ -117,10 +117,10 @@ export function UsersView({
 
           <p
             style={{
-              fontSize: '13px',
+              fontSize: '13.5px',
               color: 'var(--murmur-text-secondary)',
-              lineHeight: 1.5,
-              marginBottom: '22px',
+              lineHeight: 1.55,
+              marginBottom: '24px',
             }}
           >
             This directory contains registered accounts, authentication profiles, and login activity. Access is restricted to administrator (<strong style={{ color: 'var(--murmur-plum)' }}>arunkumarpatil24j2007@gmail.com</strong>).
@@ -133,24 +133,24 @@ export function UsersView({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '11px 26px',
+              padding: '12px 28px',
               borderRadius: '9999px',
-              backgroundColor: '#250E18',
+              backgroundColor: 'var(--murmur-plum)',
               color: '#FFFFFF',
               fontSize: '13.5px',
               fontWeight: 600,
               border: 'none',
               cursor: 'pointer',
-              boxShadow: '0 4px 14px rgba(37, 14, 24, 0.22)',
+              boxShadow: '0 4px 16px rgba(45, 11, 27, 0.28)',
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.backgroundColor = '#381525';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(45, 11, 27, 0.35)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.backgroundColor = '#250E18';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(45, 11, 27, 0.28)';
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">

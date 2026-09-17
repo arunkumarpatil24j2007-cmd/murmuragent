@@ -10,6 +10,7 @@ import { SettingsModal } from './settings-modal';
 import { LoginModal } from './login-modal';
 import { AdminPasswordModal } from './admin-password-modal';
 import { AgentNotch } from '@/components/agent-notch';
+import { AtmosphericGlow } from '@/components/atmospheric-glow';
 
 interface UserSession {
   email: string;
@@ -186,6 +187,9 @@ export function MacOSApp() {
       {/* Central Interactive MacBook Notch */}
       <AgentNotch />
 
+      {/* Atmospheric Ambient Glow Layer */}
+      <AtmosphericGlow />
+
       {/* Minimalist Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -221,6 +225,7 @@ export function MacOSApp() {
             key={conversationKey}
             conversationId={currentConversationId}
             onNewConversation={handleNewChat}
+            userName={currentUser?.name || 'Arunkumar'}
           />
         )}
 

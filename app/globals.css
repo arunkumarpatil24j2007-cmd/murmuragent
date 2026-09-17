@@ -3,37 +3,48 @@
 @import "tailwindcss";
 
 :root {
-  /* Murmur 2.0 Minimal & Warm Editorial Design Tokens */
-  --murmur-canvas: #FBF9F5;
-  --murmur-surface: #FFFFFF;
-  --murmur-sidebar: #F5EFE6;
-  --murmur-sidebar-hover: #EFE8DE;
-  --murmur-sidebar-active: #E7DED2;
-  --murmur-border: rgba(40, 8, 19, 0.08);
-  --murmur-border-subtle: rgba(40, 8, 19, 0.04);
+  /* Murmur Core Editorial & Atmospheric Design Tokens */
+  --murmur-canvas: #FAF8F4;
+  --murmur-surface: #FFFDFC;
+  --murmur-surface-hover: #FDFBF7;
+  --murmur-sidebar: #F4EFE7;
+  --murmur-sidebar-hover: #EDE6DC;
+  --murmur-sidebar-active: #E4DBD0;
+  
+  --murmur-plum: #2D0B1B;
+  --murmur-plum-hover: #3A0D21;
+  --murmur-plum-soft: #F5DDE4;
+  --murmur-pink: #F5DDE4;
+  --murmur-peach: #F6E3D7;
+  --murmur-lavender: #E8E0F2;
+  --murmur-cream: #F7F1E8;
+
+  --murmur-text-primary: #2D0B1B;
+  --murmur-text-secondary: #776C68;
+  --murmur-text-tertiary: #8E837D;
+  --murmur-text-muted: #A69B95;
+
+  --murmur-border: rgba(55, 35, 35, 0.08);
+  --murmur-border-subtle: rgba(55, 35, 35, 0.04);
   --murmur-border-solid: #EAE2D7;
+  --murmur-border-card: rgba(240, 225, 225, 0.65);
 
-  --murmur-plum: #2D0D19;
-  --murmur-plum-hover: #3F1425;
-  --murmur-plum-muted: #541E33;
-  --murmur-tag-bg: rgba(45, 13, 25, 0.05);
+  --murmur-user-msg: #F5EDE4;
+  --murmur-code-bg: #200C16;
+  --murmur-code-text: #FDFBF8;
 
-  --murmur-text-primary: #1C0B12;
-  --murmur-text-secondary: #6B5E55;
-  --murmur-text-tertiary: #9E9086;
-  --murmur-text-muted: #B8ACA2;
-
-  --murmur-user-msg: #F4ECE2;
-  --murmur-code-bg: #F5EFE8;
-
-  --murmur-radius-sm: 8px;
+  --murmur-radius-xs: 6px;
+  --murmur-radius-sm: 10px;
   --murmur-radius-md: 14px;
-  --murmur-radius-lg: 20px;
+  --murmur-radius-lg: 18px;
+  --murmur-radius-xl: 24px;
+  --murmur-radius-2xl: 28px;
   --murmur-radius-full: 9999px;
 
-  --murmur-shadow-subtle: 0 1px 3px rgba(40, 8, 19, 0.03), 0 1px 2px rgba(40, 8, 19, 0.02);
-  --murmur-shadow-card: 0 4px 16px -4px rgba(40, 8, 19, 0.04), 0 1px 2px rgba(40, 8, 19, 0.03);
-  --murmur-shadow-modal: 0 20px 48px -10px rgba(40, 8, 19, 0.14), 0 2px 8px rgba(40, 8, 19, 0.06);
+  --murmur-shadow-subtle: 0 2px 8px rgba(45, 11, 27, 0.03), 0 1px 2px rgba(45, 11, 27, 0.02);
+  --murmur-shadow-card: 0 12px 36px -8px rgba(45, 11, 27, 0.06), 0 2px 6px rgba(45, 11, 27, 0.02);
+  --murmur-shadow-modal: 0 28px 70px -12px rgba(45, 11, 27, 0.18), 0 4px 16px rgba(45, 11, 27, 0.06);
+  --murmur-shadow-composer: 0 16px 48px -10px rgba(245, 180, 200, 0.35), 0 4px 18px rgba(45, 11, 27, 0.04);
 
   /* Legacy aliases for backwards compatibility */
   --mac-sidebar-bg: var(--murmur-sidebar);
@@ -57,7 +68,7 @@
   --mac-traffic-maximize: #27C93F;
 
   --mac-window-shadow: var(--murmur-shadow-card);
-  --mac-window-radius: 16px;
+  --mac-window-radius: 18px;
 }
 
 * {

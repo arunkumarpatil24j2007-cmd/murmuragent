@@ -23,6 +23,7 @@ interface AgentConsoleProps {
   searchQuery?: string;
   onNewConversation?: () => void;
   conversationId?: string;
+  userName?: string;
 }
 
 const PROMPT_SUGGESTIONS = [
@@ -37,6 +38,7 @@ export function AgentConsole({
   composerRef: externalComposerRef,
   searchQuery = '',
   conversationId: propConversationId,
+  userName = 'Arunkumar',
 }: AgentConsoleProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState(() => propConversationId || uuid());
@@ -446,7 +448,7 @@ export function AgentConsole({
         }}
       >
         {filteredMessages.length === 0 && !isProcessing ? (
-          /* ─── Minimal Home State ─── */
+          /* ─── Google Labs Editorial Home State ─── */
           <div
             style={{
               display: 'flex',
@@ -454,40 +456,79 @@ export function AgentConsole({
               alignItems: 'center',
               justifyContent: 'center',
               margin: 'auto 0',
-              padding: '40px 20px',
+              padding: '20px 20px 40px 20px',
               textAlign: 'center',
               width: '100%',
+              zIndex: 2,
             }}
           >
-            <div style={{ maxWidth: '640px', width: '100%' }}>
+            <div style={{ maxWidth: '680px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* Mascot Hero Character with Hand-Drawn Annotation */}
               <div
                 style={{
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  color: 'var(--murmur-text-muted)',
-                  marginBottom: '10px',
+                  position: 'relative',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
                 }}
               >
-                Good afternoon, Arunkumar
+                <img
+                  src="/mascot-hero.png"
+                  alt="Murmur Character — Same brain. Less friction."
+                  style={{
+                    width: '280px',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                    filter: 'drop-shadow(0 14px 28px rgba(245, 210, 225, 0.4))',
+                  }}
+                />
               </div>
 
+              {/* Uppercase Tracked Greeting */}
+              <div
+                style={{
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--murmur-text-muted)',
+                  marginBottom: '8px',
+                }}
+              >
+                Good afternoon, {userName}
+              </div>
+
+              {/* Main Headline */}
               <h1
                 style={{
-                  fontSize: '32px',
+                  fontSize: '36px',
                   fontWeight: 700,
                   letterSpacing: '-0.03em',
                   color: 'var(--murmur-plum)',
-                  lineHeight: '1.25',
-                  marginBottom: '32px',
+                  lineHeight: '1.2',
+                  marginBottom: '8px',
                 }}
               >
                 What can Murmur do for you?
               </h1>
 
-              {/* Centered Hero Composer */}
-              <div style={{ marginBottom: '24px' }}>
+              {/* Subtitle */}
+              <p
+                style={{
+                  fontSize: '15px',
+                  color: 'var(--murmur-text-secondary)',
+                  marginBottom: '28px',
+                  fontWeight: 400,
+                }}
+              >
+                Talk, plan, build or automate — your call.
+              </p>
+
+              {/* Centered Floating Hero Composer */}
+              <div style={{ width: '100%', marginBottom: '22px' }}>
                 <Composer
                   onSend={(msg) => handleSend(msg)}
                   onStop={handleStop}
@@ -502,12 +543,12 @@ export function AgentConsole({
                 />
               </div>
 
-              {/* Understated Suggestion Pills */}
+              {/* Pill Suggestion Chips */}
               <div
                 style={{
                   display: 'flex',
                   flexWrap: 'wrap',
-                  gap: '8px',
+                  gap: '10px',
                   justifyContent: 'center',
                 }}
               >
@@ -520,24 +561,28 @@ export function AgentConsole({
                       handleSend(item.prompt, item.mode);
                     }}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: '16px',
-                      border: '1px solid var(--murmur-border)',
+                      padding: '7px 16px',
+                      borderRadius: '9999px',
+                      border: '1px solid rgba(220, 210, 204, 0.8)',
                       backgroundColor: '#FFFFFF',
-                      color: 'var(--murmur-text-secondary)',
-                      fontSize: '12px',
+                      color: 'var(--murmur-text-primary)',
+                      fontSize: '13px',
                       fontWeight: 500,
                       cursor: 'pointer',
-                      transition: 'all 0.12s ease',
-                      boxShadow: 'var(--murmur-shadow-subtle)',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 1px 3px rgba(45, 11, 27, 0.04)',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--murmur-plum)';
+                      e.currentTarget.style.borderColor = 'rgba(239, 164, 191, 0.9)';
                       e.currentTarget.style.color = 'var(--murmur-plum)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 10px rgba(45, 11, 27, 0.06)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--murmur-border)';
-                      e.currentTarget.style.color = 'var(--murmur-text-secondary)';
+                      e.currentTarget.style.borderColor = 'rgba(220, 210, 204, 0.8)';
+                      e.currentTarget.style.color = 'var(--murmur-text-primary)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(45, 11, 27, 0.04)';
                     }}
                   >
                     {item.label}

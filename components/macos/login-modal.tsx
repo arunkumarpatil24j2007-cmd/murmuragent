@@ -197,12 +197,12 @@ export function LoginModal({ isOpen, onClose, returnTo = '/?tab=users', onSucces
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '18px',
+          backgroundColor: '#FFFDFC',
+          borderRadius: '26px',
           width: '100%',
           maxWidth: '440px',
-          boxShadow: '0 20px 48px -10px rgba(45, 13, 25, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08)',
-          border: '1px solid var(--murmur-border-solid)',
+          boxShadow: '0 24px 60px -12px rgba(45, 11, 27, 0.22), 0 0 0 1px rgba(245, 210, 225, 0.3)',
+          border: '1px solid rgba(245, 210, 225, 0.85)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -213,7 +213,7 @@ export function LoginModal({ isOpen, onClose, returnTo = '/?tab=users', onSucces
         <div
           style={{
             padding: '22px 24px 16px 24px',
-            borderBottom: '1px solid var(--murmur-border)',
+            borderBottom: '1px solid rgba(220, 210, 204, 0.6)',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
