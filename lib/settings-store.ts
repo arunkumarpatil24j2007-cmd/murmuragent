@@ -15,7 +15,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
-  selectedModel: 'omniroutes',
+  selectedModel: 'kimi',
   temperature: 0.3,
   streamEnabled: true,
   voiceLanguage: 'en-US',

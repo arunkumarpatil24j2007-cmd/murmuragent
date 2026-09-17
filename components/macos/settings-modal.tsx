@@ -11,7 +11,7 @@ type SettingsSection = 'general' | 'models' | 'voice' | 'privacy';
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
-  const [selectedModel, setSelectedModel] = useState<string>('omniroutes');
+  const [selectedModel, setSelectedModel] = useState<string>('kimi');
   const [localConnected, setLocalConnected] = useState<boolean>(true);
   const [temperature, setTemperature] = useState<number>(0.3);
   const [streamEnabled, setStreamEnabled] = useState<boolean>(true);
@@ -23,6 +23,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     try {
       const saved = localStorage.getItem('murmur_selected_model');
       if (saved) setSelectedModel(saved);
+      else setSelectedModel('kimi');
     } catch {}
 
     fetch('/api/user/settings')
@@ -339,7 +340,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       justifyContent: 'space-between',
                     }}
                   >
-                    <span>Claude Opus 4.6 (OmniRoute)</span>
+                    <span>Kimi K2.6 (Moonshot AI via OpenRouter)</span>
                     <span style={{ fontSize: '11px', color: '#10B981', fontWeight: 600 }}>Active</span>
                   </div>
                 </div>
@@ -364,6 +365,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       outline: 'none',
                     }}
                   >
+                    <option value="kimi">Kimi K2.6 (Moonshot AI)</option>
                     <option value="omniroutes">Claude Opus 4.6 (OmniRoute)</option>
                     <option value="auto">Auto Router (Dynamic)</option>
                     <option value="gemini">Google Gemini 3.0</option>

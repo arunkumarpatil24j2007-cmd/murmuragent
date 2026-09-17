@@ -21,8 +21,8 @@ export function Composer({
   onStop,
   isProcessing = false,
   disabled,
-  activeModelLabel = 'Claude Opus 4.6',
-  selectedModelPreference = 'omniroutes',
+  activeModelLabel = 'Kimi K2.6',
+  selectedModelPreference = 'kimi',
   onSelectModel,
   mode = 'chat',
   onModeChange,
@@ -152,7 +152,7 @@ export function Composer({
 
   const defaultPlaceholder =
     mode === 'chat'
-      ? `Ask ${activeModelLabel || 'Claude Opus 4.6'} anything...`
+      ? `Ask ${activeModelLabel || 'Kimi K2.6'} anything...`
       : 'Ask Murmur to do something with your tools & connectors...';
 
   return (
@@ -267,8 +267,8 @@ export function Composer({
             Model Selection
           </div>
           {[
+            { id: 'kimi', name: 'Kimi K2.6', desc: 'Moonshot AI via OpenRouter (Default)' },
             { id: 'omniroutes', name: 'Claude Opus 4.6', desc: 'Anthropic Opus via OmniRoute' },
-            { id: 'kimi', name: 'Kimi K2.6', desc: 'Moonshot AI via OpenRouter' },
             { id: 'auto', name: 'Auto Router', desc: 'Intelligent multi-model selection' },
             { id: 'gemini', name: 'Google Gemini', desc: 'Gemini multimodal reasoning' },
             { id: 'nvidia', name: 'NVIDIA AI', desc: 'Llama 3.2 vision & reasoning' },

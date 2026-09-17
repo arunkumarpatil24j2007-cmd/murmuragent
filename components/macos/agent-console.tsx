@@ -45,8 +45,8 @@ export function AgentConsole({
   const [conversationId, setConversationId] = useState(() => propConversationId || uuid());
   const [mode, setMode] = useState<'chat' | 'agent'>('chat');
   const [status, setStatus] = useState<'idle' | 'thinking' | 'executing' | 'error'>('idle');
-  const [currentModel, setCurrentModel] = useState<string>('Claude Opus 4.6');
-  const [selectedModel, setSelectedModel] = useState<string>('omniroutes');
+  const [currentModel, setCurrentModel] = useState<string>('Kimi K2.6');
+  const [selectedModel, setSelectedModel] = useState<string>('kimi');
   const [liveStreamText, setLiveStreamText] = useState<string>('');
   const [agentStepStatus, setAgentStepStatus] = useState<string>('');
   const [activeSteps, setActiveSteps] = useState<Array<{ name: string; status: 'running' | 'completed' | 'failed' }>>([]);
@@ -67,6 +67,19 @@ export function AgentConsole({
       const savedModel = localStorage.getItem('murmur_selected_model');
       if (savedModel) {
         setSelectedModel(savedModel);
+        const labels: Record<string, string> = {
+          kimi: 'Kimi K2.6',
+          omniroutes: 'Claude Opus 4.6',
+          anthropic: 'Claude Opus 4.6',
+          auto: 'Auto Router',
+          gemini: 'Google Gemini',
+          nvidia: 'NVIDIA AI',
+          local: 'Local Qwen 3.5',
+        };
+        setCurrentModel(labels[savedModel] || 'Kimi K2.6');
+      } else {
+        setSelectedModel('kimi');
+        setCurrentModel('Kimi K2.6');
       }
     } catch {}
   }, []);

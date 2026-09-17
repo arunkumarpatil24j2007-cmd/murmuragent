@@ -347,7 +347,7 @@ export async function processChatMessage(
   message: string,
   conversationId: string,
   emit: (event: AgentEvent) => void,
-  modelPreference: string = 'omniroutes',
+  modelPreference: string = 'kimi',
   history?: Array<{ role: 'user' | 'assistant'; content: string }>,
   signal?: AbortSignal
 ): Promise<{ content: string; model: string; conversationId: string }> {
